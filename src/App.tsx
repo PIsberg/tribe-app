@@ -1,81 +1,101 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { AnimatePresence } from "framer-motion";
 import { FireBackground } from "./components/FireBackground";
-import { LockedState } from "./components/LockedState";
-import { LostSignal } from "./components/LostSignal";
 import { TribeHeader } from "./components/TribeHeader";
+import { TribeLanding } from "./components/TribeLanding";
 import { ChatFeed } from "./components/ChatFeed";
 import { MessageInput } from "./components/MessageInput";
 import { TribeManifesto } from "./components/TribeManifesto";
 import { AdSenseProvider } from "./components/AdSenseProvider";
 import { useGeolocation } from "./hooks/useGeolocation";
 import { useTribeIdentity } from "./hooks/useTribeIdentity";
-import { MockConvexProvider, useMockConvex } from "./lib/MockConvexProvider";
+import { useActiveTribe } from "./hooks/useActiveTribe";
+import { MockConvexProvider, useMockConvex, type MockTribe } from "./lib/MockConvexProvider";
 import type { Message } from "./components/MessageBubble";
 
-function InnerCircle() {
-  const identity = useTribeIdentity();
-  const { messages, sendMessage } = useMockConvex();
+// ─── Inner circle view (inside the geofence) ────────────────────────────────
 
-  const send = (text: string) => {
-    sendMessage(text, identity.tribeName, identity.userId, identity.avatarSeed);
-  };
+interface InnerCircleProps {
+  tribe: MockTribe;
+  onLeave: () => void;
+}
+
+function InnerCircle({ tribe, onLeave }: InnerCircleProps) {
+  const identity = useTribeIdentity();
+  const { getMessages, sendMessage } = useMockConvex();
+  const messages = getMessages(tribe._id) as Message[];
+
+  const send = (text: string) =>
+    sendMessage(tribe._id, text, identity.tribeName, identity.userId, identity.avatarSeed);
 
   return (
     <>
-      <TribeHeader identity={identity} />
-      <ChatFeed messages={messages as Message[]} currentUserId={identity.userId} />
+      <TribeHeader identity={identity} tribeName={tribe.name} onLeave={onLeave} />
+      <ChatFeed messages={messages} currentUserId={identity.userId} tribeName={tribe.name} />
       <MessageInput onSend={send} tribeName={identity.tribeName} />
     </>
   );
 }
 
-export default function App() {
-  const geo = useGeolocation();
-  const wasInsideRef = useRef(false);
-  const [showLostSignal, setShowLostSignal] = useState(false);
+// ─── App shell with state machine ───────────────────────────────────────────
 
-  const isLoading = geo.status === "idle" || geo.status === "requesting";
-  const isInside = geo.inside;
-  const isDenied = geo.status === "denied" || geo.status === "unsupported";
+function AppShell() {
+  const { activeTribeId, setActiveTribeId } = useActiveTribe();
+  const { tribes } = useMockConvex();
 
+  // Resolve the active tribe object (may be null if expired / not found yet)
+  const activeTribe = activeTribeId ? tribes.find((t) => t._id === activeTribeId) ?? null : null;
+
+  // If an ID is stored but no matching tribe exists, clear it immediately.
+  // tribes now persists to localStorage so this catches genuinely expired / deleted tribes.
   useEffect(() => {
-    if (isInside) {
-      wasInsideRef.current = true;
-      setShowLostSignal(false);
-    } else if (wasInsideRef.current && geo.status === "granted") {
-      setShowLostSignal(true);
-      const t = setTimeout(() => setShowLostSignal(false), 4000);
-      return () => clearTimeout(t);
+    if (activeTribeId && !activeTribe) {
+      setActiveTribeId(null);
     }
-  }, [isInside, geo.status]);
+  }, [activeTribeId, activeTribe, setActiveTribeId]);
 
-  const showLocked = !isInside && (isLoading || isDenied || geo.status === "granted");
+  const geo = useGeolocation();
 
+  const handleJoinOrCreate = (tribe: MockTribe) => setActiveTribeId(tribe._id);
+  const handleLeave = () => setActiveTribeId(null);
+
+  // ── Derive render state ────────────────────────────────────────────────────
+  const screen = !activeTribe ? "landing" : "inner";
+
+  return (
+    <div className="relative flex flex-col min-h-[100dvh] max-w-lg mx-auto w-full">
+      <AnimatePresence mode="wait">
+        {screen === "landing" ? (
+          <TribeLanding
+            key="landing"
+            geo={geo}
+            onJoin={handleJoinOrCreate}
+            onCreate={handleJoinOrCreate}
+          />
+        ) : (
+          <div
+            key="inner"
+            className="flex flex-col flex-1 min-h-[100dvh]"
+            data-testid="inner-circle"
+          >
+            <InnerCircle tribe={activeTribe!} onLeave={handleLeave} />
+          </div>
+        )}
+      </AnimatePresence>
+
+      <TribeManifesto />
+    </div>
+  );
+}
+
+// ─── Root ────────────────────────────────────────────────────────────────────
+
+export default function App() {
   return (
     <MockConvexProvider>
       <AdSenseProvider />
       <FireBackground />
-
-      <div className="relative flex flex-col min-h-[100dvh] max-w-lg mx-auto w-full">
-        <AnimatePresence mode="wait">
-          {showLostSignal ? (
-            <LostSignal key="lost" />
-          ) : showLocked ? (
-            <LockedState key="locked" geo={geo} />
-          ) : (
-            <div
-              key="inner"
-              className="flex flex-col flex-1 min-h-[100dvh]"
-              data-testid="inner-circle"
-            >
-              <InnerCircle />
-            </div>
-          )}
-        </AnimatePresence>
-
-        <TribeManifesto />
-      </div>
+      <AppShell />
     </MockConvexProvider>
   );
 }
