@@ -28,6 +28,8 @@ jobs:
 
       - name: Generate Convex types
         run: npx convex codegen
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
 
       - name: Type check
         run: npm run type-check
@@ -53,6 +55,8 @@ jobs:
 
       - name: Generate Convex types
         run: npx convex codegen
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
 
       - name: Deploy Convex + Build
         run: npx convex deploy --cmd 'npm run build'
