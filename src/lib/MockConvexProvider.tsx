@@ -37,11 +37,15 @@ type Ctx = {
     authorId: string,
     avatarSeed: string
   ) => void;
+  joinTribe: (tribeId: string, userId: string) => void;
+  leaveTribe: (tribeId: string, userId: string) => void;
+  getMemberCount: (tribeId: string) => number;
 };
 
 const MockCtx = createContext<Ctx | null>(null);
 
 const TRIBES_KEY = "tribe:mock:tribes";
+const MEMBERS_KEY = "tribe:mock:members";
 const TRIBE_TTL = 24 * 60 * 60 * 1000;
 const MSG_TTL = 30 * 60 * 1000;
 
@@ -69,14 +73,33 @@ function saveTribes(tribes: MockTribe[]) {
   }
 }
 
+function loadMembers(): Record<string, string[]> {
+  try {
+    const raw = localStorage.getItem(MEMBERS_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<string, string[]>;
+  } catch {
+    return {};
+  }
+}
+
 export function MockConvexProvider({ children }: { children: ReactNode }) {
   const [tribes, setTribes] = useState<MockTribe[]>(loadTribes);
   const [messages, setMessages] = useState<MockMessage[]>([]);
+  const [tribeMembers, setTribeMembers] = useState<Record<string, string[]>>(loadMembers);
 
   // Persist tribes to localStorage whenever they change
   useEffect(() => {
     saveTribes(tribes);
   }, [tribes]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MEMBERS_KEY, JSON.stringify(tribeMembers));
+    } catch {
+      // quota exceeded — non-fatal
+    }
+  }, [tribeMembers]);
 
   // Purge expired records periodically
   useEffect(() => {
@@ -84,7 +107,18 @@ export function MockConvexProvider({ children }: { children: ReactNode }) {
       const msgCutoff = Date.now() - MSG_TTL;
       const tribeCutoff = Date.now() - TRIBE_TTL;
       setMessages((prev) => prev.filter((m) => m.timestamp > msgCutoff));
-      setTribes((prev) => prev.filter((t) => t.createdAt > tribeCutoff));
+      setTribes((prev) => {
+        const kept = prev.filter((t) => t.createdAt > tribeCutoff);
+        const keptIds = new Set(kept.map((t) => t._id));
+        setTribeMembers((members) => {
+          const next: Record<string, string[]> = {};
+          for (const [id, users] of Object.entries(members)) {
+            if (keptIds.has(id)) next[id] = users;
+          }
+          return next;
+        });
+        return kept;
+      });
     }, 60_000);
     return () => clearInterval(id);
   }, []);
@@ -129,8 +163,28 @@ export function MockConvexProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const joinTribe = useCallback((tribeId: string, userId: string) => {
+    setTribeMembers((prev) => {
+      const current = prev[tribeId] ?? [];
+      if (current.includes(userId)) return prev;
+      return { ...prev, [tribeId]: [...current, userId] };
+    });
+  }, []);
+
+  const leaveTribe = useCallback((tribeId: string, userId: string) => {
+    setTribeMembers((prev) => {
+      const current = prev[tribeId] ?? [];
+      return { ...prev, [tribeId]: current.filter((id) => id !== userId) };
+    });
+  }, []);
+
+  const getMemberCount = useCallback(
+    (tribeId: string) => (tribeMembers[tribeId] ?? []).length,
+    [tribeMembers]
+  );
+
   return (
-    <MockCtx.Provider value={{ tribes, createTribe, getMessages, sendMessage }}>
+    <MockCtx.Provider value={{ tribes, createTribe, getMessages, sendMessage, joinTribe, leaveTribe, getMemberCount }}>
       {children}
     </MockCtx.Provider>
   );

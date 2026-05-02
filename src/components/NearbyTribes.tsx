@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { haversineDistance, formatDistance, GEOFENCE_RADIUS_M } from "../utils/geo";
-import type { MockTribe } from "../lib/MockConvexProvider";
+import { useMockConvex, type MockTribe } from "../lib/MockConvexProvider";
 import type { Coords } from "../hooks/useGeolocation";
 
 interface Props {
@@ -17,10 +17,12 @@ function timeAgo(ts: number): string {
 }
 
 export function NearbyTribes({ tribes, userCoords, onJoin }: Props) {
+  const { getMemberCount } = useMockConvex();
   const nearby = tribes
     .map((t) => ({
       tribe: t,
       distance: haversineDistance(userCoords.lat, userCoords.lng, t.lat, t.lng),
+      memberCount: getMemberCount(t._id),
     }))
     .filter(({ distance }) => distance <= 2000) // show tribes within 2km
     .sort((a, b) => a.distance - b.distance);
@@ -38,7 +40,7 @@ export function NearbyTribes({ tribes, userCoords, onJoin }: Props) {
       </div>
 
       <div className="space-y-2">
-        {nearby.map(({ tribe, distance }, i) => {
+        {nearby.map(({ tribe, distance, memberCount }, i) => {
           const isInsideNow = distance <= GEOFENCE_RADIUS_M;
           return (
             <motion.button
@@ -61,6 +63,11 @@ export function NearbyTribes({ tribes, userCoords, onJoin }: Props) {
                 </div>
                 <div className="font-mono text-[10px] text-fire-char/50 mt-0.5">
                   {timeAgo(tribe.createdAt)}
+                  {memberCount > 0 && (
+                    <span className="ml-2 text-fire-ember/70">
+                      {memberCount} {memberCount === 1 ? "member" : "members"}
+                    </span>
+                  )}
                 </div>
               </div>
 
