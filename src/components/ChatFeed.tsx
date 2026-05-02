@@ -6,11 +6,12 @@ import { TribeAd } from "./TribeAd";
 interface Props {
   messages: Message[];
   currentUserId: string;
+  onLike: (messageId: string) => void;
 }
 
 const AD_INTERVAL = 7;
 
-export function ChatFeed({ messages, currentUserId }: Props) {
+export function ChatFeed({ messages, currentUserId, onLike }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -68,6 +69,8 @@ export function ChatFeed({ messages, currentUserId }: Props) {
               key={item.data._id}
               message={item.data}
               isOwn={item.data.authorId === currentUserId}
+              likedByMe={(item.data.likes ?? []).includes(currentUserId)}
+              onLike={() => onLike(item.data._id)}
             />
           )
         )}

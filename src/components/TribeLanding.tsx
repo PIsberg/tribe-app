@@ -1,22 +1,27 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import type { Doc } from "../../convex/_generated/dataModel";
 import { CreateTribeForm } from "./CreateTribeForm";
 import { NearbyTribes } from "./NearbyTribes";
-import { useMockConvex, type MockTribe } from "../lib/MockConvexProvider";
 import { useTribeIdentity } from "../hooks/useTribeIdentity";
 import type { GeoState } from "../hooks/useGeolocation";
 
+type Tribe = Doc<"tribes">;
+
 interface Props {
   geo: GeoState;
-  onJoin: (tribe: MockTribe) => void;
-  onCreate: (tribe: MockTribe) => void;
+  tribes: Tribe[];
+  onJoin: (tribe: Tribe) => void;
+  onCreate: (tribeId: string) => void;
 }
 
-export function TribeLanding({ geo, onJoin, onCreate }: Props) {
+export function TribeLanding({ geo, tribes, onJoin, onCreate }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [pendingJoin, setPendingJoin] = useState<MockTribe | null>(null);
-  const { tribes, createTribe } = useMockConvex();
+  const [pendingJoin, setPendingJoin] = useState<Tribe | null>(null);
+  const createTribe = useMutation(api.tribes.create);
   const identity = useTribeIdentity();
 
   const isLocating = geo.status === "idle" || geo.status === "requesting";
@@ -26,14 +31,21 @@ export function TribeLanding({ geo, onJoin, onCreate }: Props) {
   const handleCreate = async (tribeName: string, userName: string) => {
     identity.setTribeName(userName);
     setCreating(true);
-    await new Promise((r) => setTimeout(r, 400));
     const coords = geo.coords ?? { lat: 0, lng: 0 };
-    const tribe = createTribe(tribeName, identity.userId, coords.lat, coords.lng);
-    setCreating(false);
-    onCreate(tribe);
+    try {
+      const newId = await createTribe({
+        name: tribeName,
+        creatorId: identity.userId,
+        lat: coords.lat,
+        lng: coords.lng,
+      });
+      onCreate(newId as string);
+    } finally {
+      setCreating(false);
+    }
   };
 
-  const handleJoin = (tribe: MockTribe) => {
+  const handleJoin = (tribe: Tribe) => {
     if (!identity.nameChosen) {
       setPendingJoin(tribe);
     } else {
@@ -137,7 +149,6 @@ export function TribeLanding({ geo, onJoin, onCreate }: Props) {
             />
           ) : (
             <motion.div key="cta" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              {/* Primary CTA */}
               <motion.button
                 onClick={() => setShowForm(true)}
                 whileTap={{ scale: 0.97 }}

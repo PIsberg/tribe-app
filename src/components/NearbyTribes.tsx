@@ -1,12 +1,19 @@
 import { motion } from "framer-motion";
 import { haversineDistance, formatDistance, GEOFENCE_RADIUS_M } from "../utils/geo";
-import { useMockConvex, type MockTribe } from "../lib/MockConvexProvider";
+import type { Doc } from "../../convex/_generated/dataModel";
 import type { Coords } from "../hooks/useGeolocation";
 
+type Tribe = Doc<"tribes">;
+
 interface Props {
-  tribes: MockTribe[];
+  tribes: Tribe[];
   userCoords: Coords;
-  onJoin: (tribe: MockTribe) => void;
+  onJoin: (tribe: Tribe) => void;
+}
+
+function isRecentlyActive(lastMessageAt: number | undefined, thresholdMs: number): boolean {
+  if (lastMessageAt == null) return false;
+  return Date.now() - lastMessageAt < thresholdMs;
 }
 
 function timeAgo(ts: number): string {
@@ -17,14 +24,12 @@ function timeAgo(ts: number): string {
 }
 
 export function NearbyTribes({ tribes, userCoords, onJoin }: Props) {
-  const { getMemberCount } = useMockConvex();
   const nearby = tribes
     .map((t) => ({
       tribe: t,
       distance: haversineDistance(userCoords.lat, userCoords.lng, t.lat, t.lng),
-      memberCount: getMemberCount(t._id),
     }))
-    .filter(({ distance }) => distance <= 2000) // show tribes within 2km
+    .filter(({ distance }) => distance <= 2000)
     .sort((a, b) => a.distance - b.distance);
 
   if (nearby.length === 0) return null;
@@ -40,8 +45,9 @@ export function NearbyTribes({ tribes, userCoords, onJoin }: Props) {
       </div>
 
       <div className="space-y-2">
-        {nearby.map(({ tribe, distance, memberCount }, i) => {
+        {nearby.map(({ tribe, distance }, i) => {
           const isInsideNow = distance <= GEOFENCE_RADIUS_M;
+          const isActive = isRecentlyActive(tribe.lastMessageAt, 5 * 60 * 1000);
           return (
             <motion.button
               key={tribe._id}
@@ -52,7 +58,6 @@ export function NearbyTribes({ tribes, userCoords, onJoin }: Props) {
               className="w-full flex items-center gap-3 p-3 rounded-xl bg-fire-ash/40 border border-fire-char/20 hover:border-fire-ember/40 hover:bg-fire-ash/60 text-left transition-all group"
               data-testid="nearby-tribe"
             >
-              {/* Fire icon with intensity based on distance */}
               <div className="text-xl flex-shrink-0">
                 {isInsideNow ? "🔥" : distance < 500 ? "🌋" : "🕯️"}
               </div>
@@ -62,11 +67,12 @@ export function NearbyTribes({ tribes, userCoords, onJoin }: Props) {
                   {tribe.name}
                 </div>
                 <div className="font-mono text-[10px] text-fire-char/50 mt-0.5">
-                  {timeAgo(tribe.createdAt)}
-                  {memberCount > 0 && (
-                    <span className="ml-2 text-fire-ember/70">
-                      {memberCount} {memberCount === 1 ? "member" : "members"}
-                    </span>
+                  {isActive ? (
+                    <span className="text-fire-ember/70">🔥 active</span>
+                  ) : tribe.lastMessageAt != null ? (
+                    <span>last message {timeAgo(tribe.lastMessageAt)}</span>
+                  ) : (
+                    <span>lit {timeAgo(tribe.createdAt)}</span>
                   )}
                 </div>
               </div>

@@ -9,11 +9,14 @@ export type Message = {
   authorId: string;
   timestamp: number;
   avatarSeed: string;
+  likes: string[];
 };
 
 interface Props {
   message: Message;
   isOwn: boolean;
+  likedByMe: boolean;
+  onLike: () => void;
 }
 
 function getHeat(timestamp: number): "hot" | "warm" | "cold" {
@@ -41,7 +44,7 @@ const HEAT_STYLES = {
   },
 };
 
-export function MessageBubble({ message, isOwn }: Props) {
+export function MessageBubble({ message, isOwn, likedByMe, onLike }: Props) {
   const heat = getHeat(message.timestamp);
   const styles = HEAT_STYLES[heat];
   const avatarUrl = avatarDataUrl(message.avatarSeed);
@@ -84,6 +87,20 @@ export function MessageBubble({ message, isOwn }: Props) {
         >
           {message.text}
         </div>
+
+        {/* Like button */}
+        <motion.button
+          onClick={onLike}
+          whileTap={{ scale: 0.8 }}
+          className={`mt-1 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono transition-colors ${
+            likedByMe
+              ? "bg-fire-ember/20 text-fire-ember border border-fire-ember/40"
+              : "bg-fire-ash/20 text-fire-char/40 border border-fire-char/10 hover:text-fire-ember/60 hover:border-fire-ember/20"
+          }`}
+        >
+          <span>{likedByMe ? "🔥" : "🕯️"}</span>
+          {message.likes.length > 0 && <span>{message.likes.length}</span>}
+        </motion.button>
       </div>
     </motion.div>
   );

@@ -1,5 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { AnimatePresence } from "framer-motion";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../convex/_generated/api";
+import type { Doc, Id } from "../convex/_generated/dataModel";
 import { FireBackground } from "./components/FireBackground";
 import { TribeHeader } from "./components/TribeHeader";
 import { TribeLanding } from "./components/TribeLanding";
@@ -10,80 +13,86 @@ import { AdSenseProvider } from "./components/AdSenseProvider";
 import { useGeolocation } from "./hooks/useGeolocation";
 import { useTribeIdentity } from "./hooks/useTribeIdentity";
 import { useActiveTribe } from "./hooks/useActiveTribe";
-import { MockConvexProvider, useMockConvex, type MockTribe } from "./lib/MockConvexProvider";
 import { haversineDistance, GEOFENCE_RADIUS_M } from "./utils/geo";
 import type { Message } from "./components/MessageBubble";
 
-// ─── Inner circle view (inside the geofence) ────────────────────────────────
+type Tribe = Doc<"tribes">;
+
+// ─── Inner circle view ───────────────────────────────────────────────────────
 
 interface InnerCircleProps {
-  tribe: MockTribe;
+  tribe: Tribe;
   onLeave: () => void;
 }
 
 function InnerCircle({ tribe, onLeave }: InnerCircleProps) {
   const identity = useTribeIdentity();
-  const { getMessages, sendMessage } = useMockConvex();
-  const messages = getMessages(tribe._id) as Message[];
+  const tribeId = tribe._id;
+  const rawMessages = useQuery(api.messages.list, { tribeId });
+  const sendMutation = useMutation(api.messages.send);
+  const toggleLikeMutation = useMutation(api.messages.toggleLike);
+
+  const messages = (rawMessages ?? []) as unknown as Message[];
 
   const send = (text: string) =>
-    sendMessage(tribe._id, text, identity.tribeName, identity.userId, identity.avatarSeed);
+    sendMutation({
+      tribeId,
+      text,
+      author: identity.tribeName,
+      authorId: identity.userId,
+      avatarSeed: identity.avatarSeed,
+    });
+
+  const handleLike = (messageId: string) =>
+    toggleLikeMutation({
+      messageId: messageId as Id<"messages">,
+      userId: identity.userId,
+    });
 
   return (
     <>
       <TribeHeader identity={identity} tribeName={tribe.name} onLeave={onLeave} />
-      <ChatFeed messages={messages} currentUserId={identity.userId} />
+      <ChatFeed messages={messages} currentUserId={identity.userId} onLike={handleLike} />
       <MessageInput onSend={send} tribeName={identity.tribeName} />
     </>
   );
 }
 
-// ─── App shell with state machine ───────────────────────────────────────────
+// ─── App shell ───────────────────────────────────────────────────────────────
 
 function AppShell() {
   const { activeTribeId, setActiveTribeId } = useActiveTribe();
-  const { tribes, joinTribe, leaveTribe, getMemberCount } = useMockConvex();
+  const tribesRaw = useQuery(api.tribes.list);
+  const tribes = useMemo(() => tribesRaw ?? [], [tribesRaw]);
   const identity = useTribeIdentity();
   const autoJoinedRef = useRef(false);
-
-  // Resolve the active tribe object (may be null if expired / not found yet)
-  const activeTribe = activeTribeId ? tribes.find((t) => t._id === activeTribeId) ?? null : null;
-
-  // If an ID is stored but no matching tribe exists, clear it immediately.
-  // tribes now persists to localStorage so this catches genuinely expired / deleted tribes.
-  useEffect(() => {
-    if (activeTribeId && !activeTribe) {
-      setActiveTribeId(null);
-    }
-  }, [activeTribeId, activeTribe, setActiveTribeId]);
-
   const geo = useGeolocation();
 
-  // Auto-join the tribe with the most members inside the geofence on first load.
+  const activeTribe = activeTribeId
+    ? tribes.find((t) => (t._id as string) === activeTribeId) ?? null
+    : null;
+
+  useEffect(() => {
+    if (activeTribeId && !activeTribe) setActiveTribeId(null);
+  }, [activeTribeId, activeTribe, setActiveTribeId]);
+
+  // Auto-join the most active tribe inside the geofence on first load.
   useEffect(() => {
     if (autoJoinedRef.current || activeTribeId || geo.status !== "granted" || !geo.coords) return;
     const { lat, lng } = geo.coords;
     const nearby = tribes
       .filter((t) => haversineDistance(lat, lng, t.lat, t.lng) <= GEOFENCE_RADIUS_M)
-      .sort((a, b) => getMemberCount(b._id) - getMemberCount(a._id));
+      .sort((a, b) => (b.lastMessageAt ?? b.createdAt) - (a.lastMessageAt ?? a.createdAt));
     if (nearby.length === 0) return;
     autoJoinedRef.current = true;
-    const tribe = nearby[0];
-    joinTribe(tribe._id, identity.userId);
-    identity.setTribeName(identity.tribeName); // mark username as chosen
-    setActiveTribeId(tribe._id);
-  }, [geo.status, geo.coords, activeTribeId, tribes, getMemberCount, identity, joinTribe, setActiveTribeId]);
+    identity.setTribeName(identity.tribeName);
+    setActiveTribeId(nearby[0]._id as string);
+  }, [geo.status, geo.coords, activeTribeId, tribes, identity, setActiveTribeId]);
 
-  const handleJoinOrCreate = (tribe: MockTribe) => {
-    joinTribe(tribe._id, identity.userId);
-    setActiveTribeId(tribe._id);
-  };
-  const handleLeave = () => {
-    if (activeTribe) leaveTribe(activeTribe._id, identity.userId);
-    setActiveTribeId(null);
-  };
+  const handleJoin = (tribe: Tribe) => setActiveTribeId(tribe._id as string);
+  const handleCreate = (tribeId: string) => setActiveTribeId(tribeId);
+  const handleLeave = () => setActiveTribeId(null);
 
-  // ── Derive render state ────────────────────────────────────────────────────
   const screen = !activeTribe ? "landing" : "inner";
 
   return (
@@ -93,8 +102,9 @@ function AppShell() {
           <TribeLanding
             key="landing"
             geo={geo}
-            onJoin={handleJoinOrCreate}
-            onCreate={handleJoinOrCreate}
+            tribes={tribes}
+            onJoin={handleJoin}
+            onCreate={handleCreate}
           />
         ) : (
           <div
@@ -106,7 +116,6 @@ function AppShell() {
           </div>
         )}
       </AnimatePresence>
-
       <TribeManifesto />
     </div>
   );
@@ -116,10 +125,10 @@ function AppShell() {
 
 export default function App() {
   return (
-    <MockConvexProvider>
+    <>
       <AdSenseProvider />
       <FireBackground />
       <AppShell />
-    </MockConvexProvider>
+    </>
   );
 }

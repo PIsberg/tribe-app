@@ -24,6 +24,7 @@ export type MockMessage = {
   authorId: string;
   timestamp: number;
   avatarSeed: string;
+  likes: string[];
 };
 
 type Ctx = {
@@ -40,6 +41,7 @@ type Ctx = {
   joinTribe: (tribeId: string, userId: string) => void;
   leaveTribe: (tribeId: string, userId: string) => void;
   getMemberCount: (tribeId: string) => number;
+  toggleLike: (messageId: string, userId: string) => void;
 };
 
 const MockCtx = createContext<Ctx | null>(null);
@@ -157,7 +159,7 @@ export function MockConvexProvider({ children }: { children: ReactNode }) {
     ) => {
       setMessages((prev) => [
         ...prev,
-        { _id: makeId(), tribeId, text, author, authorId, timestamp: Date.now(), avatarSeed },
+        { _id: makeId(), tribeId, text, author, authorId, timestamp: Date.now(), avatarSeed, likes: [] },
       ]);
     },
     []
@@ -183,8 +185,18 @@ export function MockConvexProvider({ children }: { children: ReactNode }) {
     [tribeMembers]
   );
 
+  const toggleLike = useCallback((messageId: string, userId: string) => {
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m._id !== messageId) return m;
+        const liked = (m.likes ?? []).includes(userId);
+        return { ...m, likes: liked ? m.likes.filter((id) => id !== userId) : [...(m.likes ?? []), userId] };
+      })
+    );
+  }, []);
+
   return (
-    <MockCtx.Provider value={{ tribes, createTribe, getMessages, sendMessage, joinTribe, leaveTribe, getMemberCount }}>
+    <MockCtx.Provider value={{ tribes, createTribe, getMessages, sendMessage, joinTribe, leaveTribe, getMemberCount, toggleLike }}>
       {children}
     </MockCtx.Provider>
   );
