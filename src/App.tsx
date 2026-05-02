@@ -32,7 +32,7 @@ function InnerCircle({ tribe, onLeave }: InnerCircleProps) {
   return (
     <>
       <TribeHeader identity={identity} tribeName={tribe.name} onLeave={onLeave} />
-      <ChatFeed messages={messages} currentUserId={identity.userId} tribeName={tribe.name} />
+      <ChatFeed messages={messages} currentUserId={identity.userId} />
       <MessageInput onSend={send} tribeName={identity.tribeName} />
     </>
   );
