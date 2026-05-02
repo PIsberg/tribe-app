@@ -51,6 +51,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Convex types
+        run: npx convex codegen
+
       - name: Deploy Convex + Build
         run: npx convex deploy --cmd 'npm run build'
         env:

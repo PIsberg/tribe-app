@@ -13,7 +13,7 @@ import { AdSenseProvider } from "./components/AdSenseProvider";
 import { useGeolocation } from "./hooks/useGeolocation";
 import { useTribeIdentity } from "./hooks/useTribeIdentity";
 import { useActiveTribe } from "./hooks/useActiveTribe";
-import { haversineDistance, GEOFENCE_RADIUS_M } from "./utils/geo";
+import { haversineDistance } from "./utils/geo";
 import type { Message } from "./components/MessageBubble";
 
 type Tribe = Doc<"tribes">;
