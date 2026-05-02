@@ -190,6 +190,7 @@ export function MockConvexProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useMockConvex(): Ctx {
   const ctx = useContext(MockCtx);
   if (!ctx) throw new Error("useMockConvex must be inside MockConvexProvider");

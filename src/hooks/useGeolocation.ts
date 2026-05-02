@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { haversineDistance, GEOFENCE_RADIUS_M } from "../utils/geo";
 
 export type GeoStatus = "idle" | "requesting" | "granted" | "denied" | "unsupported" | "error";
@@ -13,30 +13,22 @@ export type GeoState = {
   error: string | null;
 };
 
+type InternalState = Pick<GeoState, "status" | "coords" | "error">;
+
+const GEO_SUPPORTED = Boolean(navigator?.geolocation);
+
 // center is the geofence origin — pass the active tribe's lat/lng, or omit for no check
 export function useGeolocation(center?: Coords): GeoState {
-  const centerRef = useRef(center);
-  useEffect(() => {
-    centerRef.current = center;
-  }, [center]);
-
-  const [state, setState] = useState<GeoState>({
-    status: "idle",
+  const [state, setState] = useState<InternalState>(() => ({
+    status: GEO_SUPPORTED ? "requesting" : "unsupported",
     coords: null,
-    distance: null,
-    inside: false,
-    error: null,
-  });
+    error: GEO_SUPPORTED ? null : "Geolocation not supported",
+  }));
 
   const onPosition = useCallback((pos: GeolocationPosition) => {
-    const coords: Coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    const c = centerRef.current;
-    const distance = c ? haversineDistance(coords.lat, coords.lng, c.lat, c.lng) : null;
     setState({
       status: "granted",
-      coords,
-      distance,
-      inside: distance != null ? distance <= GEOFENCE_RADIUS_M : false,
+      coords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
       error: null,
     });
   }, []);
@@ -50,12 +42,8 @@ export function useGeolocation(center?: Coords): GeoState {
   }, []);
 
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setState((prev) => ({ ...prev, status: "unsupported", error: "Geolocation not supported" }));
-      return;
-    }
+    if (!GEO_SUPPORTED) return;
 
-    setState((prev) => ({ ...prev, status: "requesting" }));
     navigator.geolocation.getCurrentPosition(onPosition, onError, {
       enableHighAccuracy: true,
       timeout: 10000,
@@ -69,14 +57,15 @@ export function useGeolocation(center?: Coords): GeoState {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [onPosition, onError]);
 
-  // Re-derive inside/distance when center changes without a new GPS event
-  useEffect(() => {
-    setState((prev) => {
-      if (!prev.coords || !center) return prev;
-      const distance = haversineDistance(prev.coords.lat, prev.coords.lng, center.lat, center.lng);
-      return { ...prev, distance, inside: distance <= GEOFENCE_RADIUS_M };
-    });
-  }, [center]);
+  // distance and inside are derived from coords + center during render — no effect needed
+  const distance =
+    state.coords && center
+      ? haversineDistance(state.coords.lat, state.coords.lng, center.lat, center.lng)
+      : null;
 
-  return state;
+  return {
+    ...state,
+    distance,
+    inside: distance != null ? distance <= GEOFENCE_RADIUS_M : false,
+  };
 }
