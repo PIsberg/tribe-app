@@ -51,11 +51,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
+      - name: Deploy Convex + Build
+        run: npx convex deploy --cmd 'npm run build'
         env:
-          VITE_TRIBE_LAT: ${{ secrets.VITE_TRIBE_LAT || '51.5074' }}
-          VITE_TRIBE_LNG: ${{ secrets.VITE_TRIBE_LNG || '-0.1278' }}
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          CONVEX_DEPLOYMENT: ${{ secrets.CONVEX_DEPLOYMENT }}
+          VITE_CONVEX_URL: ${{ secrets.VITE_CONVEX_URL }}
+          VITE_TRIBE_LAT: ${{ secrets.VITE_TRIBE_LAT }}
+          VITE_TRIBE_LNG: ${{ secrets.VITE_TRIBE_LNG }}
+          VITE_ADSENSE_PUB_ID: ${{ secrets.VITE_ADSENSE_PUB_ID }}
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

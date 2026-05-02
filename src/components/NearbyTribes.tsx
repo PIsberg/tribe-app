@@ -29,7 +29,7 @@ export function NearbyTribes({ tribes, userCoords, onJoin }: Props) {
       tribe: t,
       distance: haversineDistance(userCoords.lat, userCoords.lng, t.lat, t.lng),
     }))
-    .filter(({ distance }) => distance <= 2000)
+    .filter(({ distance }) => distance <= 50_000)
     .sort((a, b) => a.distance - b.distance);
 
   if (nearby.length === 0) return null;

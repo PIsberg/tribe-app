@@ -81,7 +81,7 @@ function AppShell() {
     if (autoJoinedRef.current || activeTribeId || geo.status !== "granted" || !geo.coords) return;
     const { lat, lng } = geo.coords;
     const nearby = tribes
-      .filter((t) => haversineDistance(lat, lng, t.lat, t.lng) <= GEOFENCE_RADIUS_M)
+      .filter((t) => haversineDistance(lat, lng, t.lat, t.lng) <= 5000)
       .sort((a, b) => (b.lastMessageAt ?? b.createdAt) - (a.lastMessageAt ?? a.createdAt));
     if (nearby.length === 0) return;
     autoJoinedRef.current = true;
