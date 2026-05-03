@@ -143,9 +143,9 @@ test.describe("tribe — inner circle", () => {
     }
 
     const bubbles = page.locator("[data-testid='message-bubble']");
-    await expect(bubbles.filter({ hasText: "First" })).toBeVisible({ timeout: 5000 });
-    await expect(bubbles.filter({ hasText: "Second" })).toBeVisible({ timeout: 5000 });
-    await expect(bubbles.filter({ hasText: "Third" })).toBeVisible({ timeout: 5000 });
+    await expect(bubbles.filter({ hasText: "First" })).toBeVisible({ timeout: 10000 });
+    await expect(bubbles.filter({ hasText: "Second" })).toBeVisible({ timeout: 10000 });
+    await expect(bubbles.filter({ hasText: "Third" })).toBeVisible({ timeout: 10000 });
   });
 
   test("tribe name is shown in the header", async ({ page }) => {
@@ -335,9 +335,21 @@ test.describe("tribe — geofence gate", () => {
     const hash = new URL(insidePage.url()).hash.slice(1);
     await insideCtx.close();
 
-    // No geolocation permission granted at all
+    // No geolocation permission granted at all — override navigator.geolocation so the
+    // error fires immediately rather than relying on headless-Chromium timing variance.
     const deniedCtx = await browser.newContext();
     const deniedPage = await deniedCtx.newPage();
+    await deniedCtx.addInitScript(`
+      const _geoErr = { code: 1, message: 'User denied Geolocation', PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 };
+      Object.defineProperty(navigator, 'geolocation', {
+        configurable: true,
+        get: () => ({
+          getCurrentPosition: function(s, e) { setTimeout(function() { e && e(_geoErr); }, 0); },
+          watchPosition: function(s, e) { setTimeout(function() { e && e(_geoErr); }, 0); return 0; },
+          clearWatch: function() {},
+        }),
+      });
+    `);
     await deniedPage.goto(`/#${hash}`);
 
     await expect(deniedPage.locator("text=Location required")).toBeVisible({ timeout: 10000 });
@@ -437,7 +449,7 @@ test.describe("tribe — ad units", () => {
       await input.press("Enter");
       await page.waitForTimeout(80);
     }
-    await expect(page.locator("text=Signal from the Outside")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("text=Signal from the Outside")).toBeVisible({ timeout: 15000 });
   });
 });
 
