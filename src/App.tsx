@@ -9,7 +9,6 @@ import { TribeLanding } from "./components/TribeLanding";
 import { ChatFeed } from "./components/ChatFeed";
 import { MessageInput } from "./components/MessageInput";
 import { TribeManifesto } from "./components/TribeManifesto";
-import { AdSenseProvider } from "./components/AdSenseProvider";
 import { ThreadPanel } from "./components/ThreadPanel";
 import { NearbyTribes } from "./components/NearbyTribes";
 import { CreateTribeForm } from "./components/CreateTribeForm";
@@ -460,7 +459,6 @@ function AppShell() {
 export default function App() {
   return (
     <>
-      <AdSenseProvider />
       <FireBackground />
       <AppShell />
     </>

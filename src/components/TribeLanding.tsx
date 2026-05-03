@@ -6,6 +6,7 @@ import type { Doc } from "../../convex/_generated/dataModel";
 import { CreateTribeForm } from "./CreateTribeForm";
 import { NearbyTribes } from "./NearbyTribes";
 import { CampfireMap } from "./CampfireMap";
+import { TribeAd } from "./TribeAd";
 import { useTribeIdentity } from "../hooks/useTribeIdentity";
 import type { GeoState } from "../hooks/useGeolocation";
 
@@ -196,6 +197,10 @@ export function TribeLanding({ geo, tribes, onJoin, onCreate }: Props) {
             </div>
           </>
         )}
+
+        <div className="mt-6">
+          <TribeAd slot={import.meta.env.VITE_ADSENSE_SLOT_LANDING} />
+        </div>
       </motion.div>
     </motion.div>
   );

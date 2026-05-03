@@ -8,18 +8,20 @@ interface TribeAdProps {
   className?: string;
 }
 
-export function TribeAd({ slot = "auto", className = "" }: TribeAdProps) {
+export function TribeAd({ slot, className = "" }: TribeAdProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const hasSlot = typeof slot === "string" && slot.length > 0;
+  const isLive = IS_REAL_PUB && hasSlot;
 
   useEffect(() => {
-    if (!IS_REAL_PUB || !ref.current) return;
+    if (!isLive || !ref.current) return;
     try {
       // @ts-expect-error adsbygoogle injected by AdSense script
       (window.adsbygoogle = window.adsbygoogle || []).push({});
     } catch {
       // silently fail if AdSense not ready
     }
-  }, []);
+  }, [isLive]);
 
   return (
     <div
@@ -36,7 +38,7 @@ export function TribeAd({ slot = "auto", className = "" }: TribeAdProps) {
 
       {/* Ad unit */}
       <div ref={ref} className="px-3 py-3 min-h-[80px] flex items-center justify-center">
-        {IS_REAL_PUB ? (
+        {isLive ? (
           <ins
             className="adsbygoogle"
             style={{ display: "block", width: "100%", minHeight: 60 }}
@@ -46,10 +48,10 @@ export function TribeAd({ slot = "auto", className = "" }: TribeAdProps) {
             data-full-width-responsive="true"
           />
         ) : (
-          // Placeholder for development
+          // Placeholder for development / missing slot
           <div className="w-full text-center py-3">
             <p className="font-mono text-xs text-fire-char/60">
-              [ AD PLACEHOLDER — configure VITE_ADSENSE_PUB_ID ]
+              [ AD PLACEHOLDER — {IS_REAL_PUB ? "missing slot ID" : "configure VITE_ADSENSE_PUB_ID"} ]
             </p>
             <p className="font-mono text-[10px] text-fire-char/40 mt-1">
               Sponsored Beacon • {PUB_ID}
