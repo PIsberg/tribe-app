@@ -5,13 +5,16 @@ const IS_REAL_PUB = !PUB_ID.includes("XXXX");
 
 interface TribeAdProps {
   slot?: string;
+  /** Pass to render an in-feed ad unit (data-ad-format="fluid" + layout key from AdSense). */
+  layoutKey?: string;
   className?: string;
 }
 
-export function TribeAd({ slot, className = "" }: TribeAdProps) {
+export function TribeAd({ slot, layoutKey, className = "" }: TribeAdProps) {
   const ref = useRef<HTMLDivElement>(null);
   const hasSlot = typeof slot === "string" && slot.length > 0;
   const isLive = IS_REAL_PUB && hasSlot;
+  const isFluid = typeof layoutKey === "string" && layoutKey.length > 0;
 
   useEffect(() => {
     if (!isLive || !ref.current) return;
@@ -39,14 +42,25 @@ export function TribeAd({ slot, className = "" }: TribeAdProps) {
       {/* Ad unit */}
       <div ref={ref} className="px-3 py-3 min-h-[80px] flex items-center justify-center">
         {isLive ? (
-          <ins
-            className="adsbygoogle"
-            style={{ display: "block", width: "100%", minHeight: 60 }}
-            data-ad-client={PUB_ID}
-            data-ad-slot={slot}
-            data-ad-format="auto"
-            data-full-width-responsive="true"
-          />
+          isFluid ? (
+            <ins
+              className="adsbygoogle"
+              style={{ display: "block" }}
+              data-ad-client={PUB_ID}
+              data-ad-slot={slot}
+              data-ad-format="fluid"
+              data-ad-layout-key={layoutKey}
+            />
+          ) : (
+            <ins
+              className="adsbygoogle"
+              style={{ display: "block", width: "100%", minHeight: 60 }}
+              data-ad-client={PUB_ID}
+              data-ad-slot={slot}
+              data-ad-format="auto"
+              data-full-width-responsive="true"
+            />
+          )
         ) : (
           // Placeholder for development / missing slot
           <div className="w-full text-center py-3">

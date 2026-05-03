@@ -199,7 +199,10 @@ export function TribeLanding({ geo, tribes, onJoin, onCreate }: Props) {
         )}
 
         <div className="mt-6">
-          <TribeAd slot={import.meta.env.VITE_ADSENSE_SLOT_LANDING} />
+          <TribeAd
+            slot={import.meta.env.VITE_ADSENSE_SLOT_LANDING}
+            layoutKey="-6t+ed+2i-1n-4w"
+          />
         </div>
       </motion.div>
     </motion.div>

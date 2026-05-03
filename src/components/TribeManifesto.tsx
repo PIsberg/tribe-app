@@ -46,7 +46,10 @@ export function TribeManifesto() {
       </div>
 
       <div className="mt-8">
-        <TribeAd slot={import.meta.env.VITE_ADSENSE_SLOT_MANIFESTO} />
+        <TribeAd
+          slot={import.meta.env.VITE_ADSENSE_SLOT_MANIFESTO}
+          layoutKey="-6t+ed+2i-1n-4w"
+        />
       </div>
     </section>
   );
