@@ -36,7 +36,7 @@ export function TribeManifesto() {
           About this Location
         </h3>
         <p className="text-xs text-fire-char/40 font-mono leading-relaxed">
-          This campfire is anchored to a real-world coordinate. Within 300 meters
+          This campfire is anchored to a real-world coordinate. Within 1.5 km
           of that point, the inner circle opens. The conversation is live,
           ephemeral, and belongs entirely to the people in this physical space.
           All messages self-destruct. No logs are kept.

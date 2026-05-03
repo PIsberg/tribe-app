@@ -23,14 +23,14 @@ else (yes)
     stop
   else (yes)
     :haversineDistance(user, tribe);
-    if (dist > 5 000 m?) then (yes — outside)
+    if (dist > 1 500 m?) then (yes — outside)
       if (confirmedTribeId == activeTribeId?) then (yes — drifted)
         :KickedOutScreen\nYou've left the fire\nauto-dismiss 4 s; <<#Orange>>
       else (no — entry blocked)
         :TooFarScreen\nToo far from the fire\n+ distance shown; <<#Orange>>
       endif
       stop
-    else (no — inside 5 km)
+    else (no — inside 1.5 km)
       :InnerCircle\n(set confirmedTribeId); <<#LightGreen>>
       :chat · threads · images · nearby fires;
       stop

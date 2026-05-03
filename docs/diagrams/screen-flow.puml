@@ -13,12 +13,12 @@ state "Inner Circle" as I : InnerCircle\n(chat, threads, map)
 [*]  --> L  : app load
 
 L   --> GC  : tribe selected\n(join / shared link / auto-join)
-GC  --> I   : dist ≤ 5 km
-GC  --> TF  : dist > 5 km, first visit
-GC  --> KO  : dist > 5 km, was confirmed inside
+GC  --> I   : dist ≤ 1.5 km
+GC  --> TF  : dist > 1.5 km, first visit
+GC  --> KO  : dist > 1.5 km, was confirmed inside
 GC  --> GD  : permission denied
 
-I   --> KO  : drifts outside 5 km\n(geoGate useMemo fires)
+I   --> KO  : drifts outside 1.5 km\n(geoGate useMemo fires)
 I   --> L   : manual leave
 
 TF  --> L   : back button

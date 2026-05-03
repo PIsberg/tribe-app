@@ -1,6 +1,6 @@
 # tribe 🔥
 
-> Hyper-local, ephemeral campfire chat. Create a fire anywhere — only people within 5 km can join.
+> Hyper-local, ephemeral campfire chat. Create a fire anywhere — only people within 1.5 km can join.
 
 **tribe** is a real-time, geofenced mobile web app. Anyone can light a campfire at their GPS coordinates. Messages glow orange when fresh, fade to ash after 5 minutes, and self-destruct after 30. Walk out of range and you're automatically ejected.
 
@@ -10,9 +10,9 @@
 
 | Feature | Details |
 |---|---|
-| **Multiple campfires** | Create a named fire at your current coordinates; others within 5 km can join |
+| **Multiple campfires** | Create a named fire at your current coordinates; others within 1.5 km can join |
 | **Geofenced access** | `haversineDistance` is checked on every GPS update — entry blocked and auto-kick enforced server-side |
-| **Campfire map** | Leaflet map (CartoDB dark tiles) shows all fires within 50 km; 5 km geofence ring visualised |
+| **Campfire map** | Leaflet map (CartoDB dark tiles) shows all fires within 50 km; 1.5 km geofence ring visualised |
 | **Ephemeral messages** | Auto-deleted after 30 min by a Convex cron; tribes expire after 24 h |
 | **Message heat** | Fresh messages glow orange (`hot`), then fade (`warm` → `cold`) |
 | **Threaded replies** | Tap 💬 on any message to open a slide-in thread panel |
@@ -87,7 +87,7 @@ This will:
 npm run dev
 ```
 
-Open `http://localhost:5173`. Grant location permissions when prompted. If you're outside an existing fire's 5 km radius, use **"Light a new fire"** to create one at your location.
+Open `http://localhost:5173`. Grant location permissions when prompted. If you're outside an existing fire's 1.5 km radius, use **"Light a new fire"** to create one at your location.
 
 > **Dev tip:** Use your browser's DevTools geolocation override to test with spoofed coordinates without physically moving.
 
@@ -145,10 +145,10 @@ The `TribeManifesto` section provides article-style text to satisfy the content 
 
 ## Geofence Radius
 
-The join radius is 5 km, set in `src/utils/geo.ts`:
+The join radius is 1.5 km, set in `src/utils/geo.ts`:
 
 ```typescript
-export const GEOFENCE_RADIUS_M = 5000; // metres
+export const GEOFENCE_RADIUS_M = 1500; // metres
 ```
 
 The map also shows all campfires within a 50 km discovery radius.
