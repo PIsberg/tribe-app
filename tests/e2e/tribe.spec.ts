@@ -18,18 +18,21 @@ async function enterInnerCircle(page: Page) {
   await page.goto("/");
 
   const innerCircle = page.locator("[data-testid='inner-circle']");
-  const landing = page.locator("[data-testid='tribe-landing']");
+  const createBtn = page.locator("[data-testid='create-tribe-btn']");
 
-  await expect(landing.or(innerCircle)).toBeVisible({ timeout: 10000 });
+  // Wait for either auto-join (inner-circle visible) or no nearby tribe (create button visible).
+  // Checking the create button — not the landing wrapper — avoids a race where the app
+  // auto-joins between the landing.isVisible() check and the subsequent fill() call.
+  await expect(innerCircle.or(createBtn)).toBeVisible({ timeout: 12000 });
 
-  if (await landing.isVisible()) {
-    await page.click("[data-testid='create-tribe-btn']");
-    await page.fill("[aria-label='Your name']", "Tester");
-    await page.fill("[aria-label='Tribe name']", "CI Test Tribe");
-    await page.getByText("Light the Fire").click();
+  if (await createBtn.isVisible()) {
+    await createBtn.click();
+    await page.getByRole("textbox", { name: /your name/i }).fill("Tester");
+    await page.getByRole("textbox", { name: /tribe name/i }).fill("CI Test Tribe");
+    await page.getByRole("button", { name: /light the fire/i }).click();
   }
 
-  await expect(innerCircle).toBeVisible({ timeout: 10000 });
+  await expect(innerCircle).toBeVisible({ timeout: 15000 });
 }
 
 test.describe("tribe — landing state", () => {
