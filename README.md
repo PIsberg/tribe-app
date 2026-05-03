@@ -184,7 +184,6 @@ tribe/
 │   │   └── useTribeIdentity.ts    # userId + tribeName + avatarSeed (localStorage)
 │   ├── utils/
 │   │   ├── geo.ts                 # Haversine formula + GEOFENCE_RADIUS_M
-│   │   ├── tribeNames.ts          # Random name generator
 │   │   └── avatar.ts              # Deterministic DJB2-hashed SVG avatar
 │   └── lib/
 │       └── MockConvexProvider.tsx # In-memory mock for dev without Convex

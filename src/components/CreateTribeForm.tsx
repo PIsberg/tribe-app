@@ -6,7 +6,7 @@ const NAME_MAX = 24;
 
 interface Props {
   onSubmit: (tribeName: string, userName: string) => void;
-  onCancel: () => void;
+  onCancel?: () => void;
   disabled?: boolean;
   defaultUserName?: string;
   nameOnly?: boolean;
@@ -108,13 +108,15 @@ export function CreateTribeForm({ onSubmit, onCancel, disabled, defaultUserName 
           >
             {nameOnly ? "Join the Fire 🔥" : "Light the Fire 🔥"}
           </motion.button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-3 rounded-xl border border-fire-char/30 font-mono text-xs text-fire-char/60 hover:border-fire-char/50 transition-colors"
-          >
-            Cancel
-          </button>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-3 rounded-xl border border-fire-char/30 font-mono text-xs text-fire-char/60 hover:border-fire-char/50 transition-colors"
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </form>
     </motion.div>
