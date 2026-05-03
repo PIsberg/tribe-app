@@ -1,4 +1,4 @@
-name: Deploy to Vercel
+name: Deploy Convex
 
 on:
   push:
@@ -11,11 +11,8 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy
+    name: Deploy Convex
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: ${{ steps.deploy.outputs.url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -29,28 +26,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy Convex + Build
-        run: npx convex deploy --cmd 'npm run build'
+      - name: Deploy Convex
+        run: npx convex deploy
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-          VITE_CONVEX_URL: ${{ secrets.VITE_CONVEX_URL }}
-          VITE_TRIBE_LAT: ${{ secrets.VITE_TRIBE_LAT }}
-          VITE_TRIBE_LNG: ${{ secrets.VITE_TRIBE_LNG }}
-          VITE_ADSENSE_PUB_ID: ${{ secrets.VITE_ADSENSE_PUB_ID }}
-
-      - name: Deploy to Vercel
-        id: deploy
-        run: |
-          npm install -g vercel
-          URL=$(vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} \
-            --env VITE_CONVEX_URL=${{ secrets.VITE_CONVEX_URL }} \
-            --env VITE_TRIBE_LAT=${{ secrets.VITE_TRIBE_LAT }} \
-            --env VITE_TRIBE_LNG=${{ secrets.VITE_TRIBE_LNG }} \
-            --env VITE_ADSENSE_PUB_ID=${{ secrets.VITE_ADSENSE_PUB_ID }})
-          echo "url=$URL" >> $GITHUB_OUTPUT
-
-      - name: Comment deploy URL on PR
-        if: github.event_name == 'pull_request'
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          message: "🔥 Deployed to ${{ steps.deploy.outputs.url }}"
