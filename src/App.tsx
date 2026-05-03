@@ -15,6 +15,7 @@ import { NearbyTribes } from "./components/NearbyTribes";
 import { CreateTribeForm } from "./components/CreateTribeForm";
 import { useGeolocation } from "./hooks/useGeolocation";
 import { useActiveTribe } from "./hooks/useActiveTribe";
+import { useTribeIdentity } from "./hooks/useTribeIdentity";
 import { haversineDistance, formatDistance, GEOFENCE_RADIUS_M } from "./utils/geo";
 import type { Message } from "./components/MessageBubble";
 import type { GeoState } from "./hooks/useGeolocation";
