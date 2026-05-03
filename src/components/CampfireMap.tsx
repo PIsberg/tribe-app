@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Circle, Popup, useMap } from "react-leaflet";
+import { useEffect, useState } from "react";
+import { MapContainer, TileLayer, Marker, Circle, CircleMarker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { motion } from "framer-motion";
@@ -20,16 +20,6 @@ function isRecentlyActive(lastMessageAt: number | undefined): boolean {
   return lastMessageAt != null && Date.now() - lastMessageAt < 5 * 60 * 1000;
 }
 
-function makeFireIcon(joinable: boolean) {
-  return L.divIcon({
-    html: `<div style="font-size:22px;line-height:1;transform:translate(-50%,-50%);filter:${joinable ? "drop-shadow(0 0 6px #ff4500)" : "grayscale(100%) opacity(0.35)"}">🔥</div>`,
-    iconSize: [1, 1],
-    iconAnchor: [0, 0],
-    popupAnchor: [0, -14],
-    className: "",
-  });
-}
-
 const userIcon = L.divIcon({
   html: `<div style="width:14px;height:14px;background:#60a5fa;border:2px solid white;border-radius:50%;box-shadow:0 0 0 5px rgba(96,165,250,0.25);transform:translate(-50%,-50%)"></div>`,
   iconSize: [1, 1],
@@ -45,6 +35,15 @@ function RecenterOnUser({ coords }: { coords: Coords }) {
   return null;
 }
 
+function InvalidateOnResize({ trigger }: { trigger: unknown }) {
+  const map = useMap();
+  useEffect(() => {
+    const id = window.setTimeout(() => map.invalidateSize(), 320);
+    return () => window.clearTimeout(id);
+  }, [trigger, map]);
+  return null;
+}
+
 interface Props {
   tribes: Tribe[];
   userCoords: Coords;
@@ -53,25 +52,31 @@ interface Props {
 }
 
 export function CampfireMap({ tribes, userCoords, onJoin, onClose }: Props) {
+  const [maximized, setMaximized] = useState(false);
   const nearby = tribes
     .map((t) => ({ tribe: t, dist: haversineDistance(userCoords.lat, userCoords.lng, t.lat, t.lng) }))
     .filter(({ dist }) => dist <= 50_000)
     .sort((a, b) => a.dist - b.dist);
 
+  const containerStyle: React.CSSProperties = maximized
+    ? { position: "fixed", inset: 0, zIndex: 1000, borderRadius: 0 }
+    : { position: "relative" };
+  const mapHeight = maximized ? "100dvh" : "340px";
+
   return (
     <motion.div
-      className="w-full mt-4 rounded-2xl overflow-hidden border border-fire-char/20"
+      className={`w-full mt-4 ${maximized ? "" : "rounded-2xl"} overflow-hidden border border-fire-char/20`}
       initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: 340 }}
+      animate={{ opacity: 1, height: maximized ? "100dvh" : 340 }}
       exit={{ opacity: 0, height: 0 }}
       transition={{ type: "spring", stiffness: 260, damping: 28 }}
-      style={{ position: "relative" }}
+      style={containerStyle}
     >
       <MapContainer
         center={[userCoords.lat, userCoords.lng]}
         zoom={13}
-        style={{ height: "340px", width: "100%", background: "#0a1a0a" }}
-        zoomControl={false}
+        style={{ height: mapHeight, width: "100%", background: "#0a1a0a" }}
+        zoomControl={true}
         attributionControl={false}
       >
         <TileLayer
@@ -79,6 +84,7 @@ export function CampfireMap({ tribes, userCoords, onJoin, onClose }: Props) {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/">CARTO</a>'
         />
         <RecenterOnUser coords={userCoords} />
+        <InvalidateOnResize trigger={maximized} />
 
         {/* 5km geofence ring */}
         <Circle
@@ -94,11 +100,18 @@ export function CampfireMap({ tribes, userCoords, onJoin, onClose }: Props) {
         {nearby.map(({ tribe, dist }) => {
           const joinable = dist <= GEOFENCE_RADIUS_M;
           const isActive = isRecentlyActive(tribe.lastMessageAt);
+          const fillColor = joinable ? "#ff4500" : "#6b6b6b";
           return (
-            <Marker
+            <CircleMarker
               key={tribe._id}
-              position={[tribe.lat, tribe.lng]}
-              icon={makeFireIcon(joinable)}
+              center={[tribe.lat, tribe.lng]}
+              radius={isActive && joinable ? 9 : 7}
+              pathOptions={{
+                color: joinable ? "#ffb37a" : "#3a3a3a",
+                weight: 2,
+                fillColor,
+                fillOpacity: joinable ? 0.85 : 0.35,
+              }}
             >
               <Popup
                 className="campfire-popup"
@@ -145,31 +158,57 @@ export function CampfireMap({ tribes, userCoords, onJoin, onClose }: Props) {
                   )}
                 </div>
               </Popup>
-            </Marker>
+            </CircleMarker>
           );
         })}
       </MapContainer>
 
-      {/* Close map button */}
-      <button
-        onClick={onClose}
+      {/* Map controls */}
+      <div
         style={{
           position: "absolute",
           top: 8,
           right: 8,
           zIndex: 1000,
-          background: "rgba(5,15,5,0.85)",
-          border: "1px solid rgba(255,69,0,0.3)",
-          color: "rgba(255,255,255,0.6)",
-          borderRadius: 8,
-          padding: "4px 8px",
-          fontFamily: "monospace",
-          fontSize: 11,
-          cursor: "pointer",
+          display: "flex",
+          gap: 6,
         }}
       >
-        ✕ map
-      </button>
+        <button
+          onClick={() => setMaximized((m) => !m)}
+          aria-label={maximized ? "Restore map" : "Maximize map"}
+          style={{
+            background: "rgba(5,15,5,0.85)",
+            border: "1px solid rgba(255,69,0,0.3)",
+            color: "rgba(255,255,255,0.6)",
+            borderRadius: 8,
+            padding: "4px 8px",
+            fontFamily: "monospace",
+            fontSize: 11,
+            cursor: "pointer",
+          }}
+        >
+          {maximized ? "⤡ minimize" : "⤢ maximize"}
+        </button>
+        <button
+          onClick={() => {
+            if (maximized) setMaximized(false);
+            onClose();
+          }}
+          style={{
+            background: "rgba(5,15,5,0.85)",
+            border: "1px solid rgba(255,69,0,0.3)",
+            color: "rgba(255,255,255,0.6)",
+            borderRadius: 8,
+            padding: "4px 8px",
+            fontFamily: "monospace",
+            fontSize: 11,
+            cursor: "pointer",
+          }}
+        >
+          ✕ map
+        </button>
+      </div>
 
       {nearby.length === 0 && (
         <div

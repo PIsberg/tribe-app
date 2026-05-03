@@ -58,7 +58,7 @@ function MessageText({ text, textColor }: { text: string; textColor: string }) {
             href={p.value}
             target="_blank"
             rel="noopener noreferrer"
-            className="underline text-fire-glow/80 hover:text-fire-glow transition-colors"
+            className="underline decoration-amber-300/50 text-amber-300 hover:text-amber-200 transition-colors"
             onClick={(e) => e.stopPropagation()}
           >
             {p.value}
