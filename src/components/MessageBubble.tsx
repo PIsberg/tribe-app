@@ -127,12 +127,13 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
         <motion.button
           onClick={onLike}
           whileTap={{ scale: 0.8 }}
+          aria-label="Like message"
           className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-mono transition-colors ${
             likedByMe
               ? "text-fire-ember"
               : hasLikes
               ? "text-fire-char/50 hover:text-fire-ember/70"
-              : "opacity-0 group-hover:opacity-100 text-fire-char/35 hover:text-fire-ember/60"
+              : "text-fire-char/40 hover:text-fire-ember/70 md:opacity-50 md:group-hover:opacity-100"
           }`}
         >
           <span>{likedByMe ? "🔥" : "🕯️"}</span>
@@ -143,10 +144,11 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
           <motion.button
             onClick={onThreadReply}
             whileTap={{ scale: 0.8 }}
+            aria-label="Reply in thread"
             className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-mono transition-colors ${
               hasReplies
                 ? "text-fire-glow/60 hover:text-fire-glow"
-                : "opacity-0 group-hover:opacity-100 text-fire-char/35 hover:text-fire-glow/60"
+                : "text-fire-char/40 hover:text-fire-glow/70 md:opacity-50 md:group-hover:opacity-100"
             }`}
           >
             <span>💬</span>
