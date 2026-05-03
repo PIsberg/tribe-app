@@ -16,8 +16,6 @@ dist-ssr
 playwright-report/
 test-results/
 
-# Convex generated files
-convex/_generated/
 
 # Environment
 .env.local

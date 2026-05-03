@@ -91,6 +91,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
@@ -101,7 +107,7 @@ jobs:
           path: dist/
 
       - name: Run E2E tests
-        run: npx playwright test
+        run: npx playwright test --project=chromium
         env:
           CI: true
           VITE_TRIBE_LAT: "51.5074"

@@ -10,6 +10,8 @@ export type Message = {
   timestamp: number;
   avatarSeed: string;
   likes: string[];
+  parentId?: string;
+  replyCount?: number;
 };
 
 interface Props {
@@ -17,6 +19,7 @@ interface Props {
   isOwn: boolean;
   likedByMe: boolean;
   onLike: () => void;
+  onThreadReply?: () => void;
 }
 
 function getHeat(timestamp: number): "hot" | "warm" | "cold" {
@@ -26,81 +29,82 @@ function getHeat(timestamp: number): "hot" | "warm" | "cold" {
   return "cold";
 }
 
-const HEAT_STYLES = {
-  hot: {
-    bubble: "bg-[#1a0a02] border-fire-ember/50 text-white",
-    shadow: "0 0 12px rgba(255,69,0,0.35), 0 0 4px rgba(255,140,0,0.2)",
-    name: "text-fire-glow",
-  },
-  warm: {
-    bubble: "bg-[#110d0a] border-fire-char/40 text-white/80",
-    shadow: "0 0 6px rgba(255,69,0,0.12)",
-    name: "text-fire-char/80",
-  },
-  cold: {
-    bubble: "bg-[#0d0d0d] border-fire-char/20 text-white/40",
-    shadow: "none",
-    name: "text-fire-char/40",
-  },
-};
-
-export function MessageBubble({ message, isOwn, likedByMe, onLike }: Props) {
+export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply }: Props) {
   const heat = getHeat(message.timestamp);
-  const styles = HEAT_STYLES[heat];
   const avatarUrl = avatarDataUrl(message.avatarSeed);
   const timeStr = new Date(message.timestamp).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
 
+  const nameColor =
+    heat === "hot" ? "text-fire-ember" : heat === "warm" ? "text-fire-glow/70" : "text-fire-char/45";
+  const textColor = heat === "cold" ? "text-white/35" : "text-white/85";
+  const borderColor =
+    heat === "hot" ? "border-l-fire-ember/60" : isOwn ? "border-l-fire-glow/20" : "border-l-transparent";
+
+  const hasLikes = message.likes.length > 0;
+  const hasReplies = (message.replyCount ?? 0) > 0;
+
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 20, scale: 0.92 }}
-      animate={{ opacity: heat === "cold" ? 0.5 : 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.85, y: -10 }}
-      transition={{ type: "spring", stiffness: 280, damping: 22 }}
-      className={`flex gap-2.5 items-end ${isOwn ? "flex-row-reverse" : ""}`}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: heat === "cold" ? 0.5 : 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      transition={{ type: "spring", stiffness: 300, damping: 26 }}
+      className={`flex items-start gap-2 px-2 py-[3px] rounded-sm group hover:bg-fire-ash/10 border-l-2 transition-colors ${borderColor} ${isOwn ? "bg-fire-ash/5" : ""}`}
       data-testid="message-bubble"
     >
-      <Avatar url={avatarUrl} name={message.author} size={32} className="mb-0.5" />
+      <Avatar url={avatarUrl} name={message.author} size={16} className="mt-[3px] flex-shrink-0" />
 
-      <div className={`flex flex-col ${isOwn ? "items-end" : "items-start"} max-w-[75%]`}>
-        <div className="flex items-center gap-2 mb-1">
-          <span className={`font-mono text-[10px] font-bold uppercase tracking-wide ${styles.name}`}>
-            {message.author}
-          </span>
-          <span className="font-mono text-[9px] text-fire-char/40">{timeStr}</span>
-          {heat === "hot" && (
-            <motion.span
-              className="text-[10px]"
-              animate={{ opacity: [1, 0.5, 1] }}
-              transition={{ duration: 1.2, repeat: Infinity }}
-            >
-              🔥
-            </motion.span>
-          )}
-        </div>
-        <div
-          className={`relative px-3.5 py-2 rounded-2xl border text-sm leading-relaxed ${styles.bubble}`}
-          style={{ boxShadow: styles.shadow, borderRadius: isOwn ? "18px 4px 18px 18px" : "4px 18px 18px 18px" }}
-        >
-          {message.text}
-        </div>
+      <div className="flex-1 min-w-0 leading-snug">
+        <span className={`font-mono text-[10px] font-bold mr-1.5 ${nameColor}`}>
+          {message.author}
+        </span>
+        <span className="font-mono text-[9px] text-fire-char/35 mr-1.5">{timeStr}</span>
+        {heat === "hot" && (
+          <motion.span
+            className="text-[9px] mr-1"
+            animate={{ opacity: [1, 0.5, 1] }}
+            transition={{ duration: 1.2, repeat: Infinity }}
+          >
+            🔥
+          </motion.span>
+        )}
+        <span className={`text-[13px] ${textColor} break-words`}>{message.text}</span>
+      </div>
 
-        {/* Like button */}
+      <div className="flex items-center gap-1 flex-shrink-0">
         <motion.button
           onClick={onLike}
           whileTap={{ scale: 0.8 }}
-          className={`mt-1 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono transition-colors ${
+          className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-mono transition-colors ${
             likedByMe
-              ? "bg-fire-ember/20 text-fire-ember border border-fire-ember/40"
-              : "bg-fire-ash/20 text-fire-char/40 border border-fire-char/10 hover:text-fire-ember/60 hover:border-fire-ember/20"
+              ? "text-fire-ember"
+              : hasLikes
+              ? "text-fire-char/50 hover:text-fire-ember/70"
+              : "opacity-0 group-hover:opacity-100 text-fire-char/35 hover:text-fire-ember/60"
           }`}
         >
           <span>{likedByMe ? "🔥" : "🕯️"}</span>
-          {message.likes.length > 0 && <span>{message.likes.length}</span>}
+          {hasLikes && <span>{message.likes.length}</span>}
         </motion.button>
+
+        {onThreadReply && (
+          <motion.button
+            onClick={onThreadReply}
+            whileTap={{ scale: 0.8 }}
+            className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-mono transition-colors ${
+              hasReplies
+                ? "text-fire-glow/60 hover:text-fire-glow"
+                : "opacity-0 group-hover:opacity-100 text-fire-char/35 hover:text-fire-glow/60"
+            }`}
+          >
+            <span>💬</span>
+            {hasReplies && <span>{message.replyCount}</span>}
+          </motion.button>
+        )}
       </div>
     </motion.div>
   );

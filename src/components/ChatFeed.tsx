@@ -7,20 +7,25 @@ interface Props {
   messages: Message[];
   currentUserId: string;
   onLike: (messageId: string) => void;
+  onThreadReply: (messageId: string) => void;
 }
 
 const AD_INTERVAL = 7;
 
-export function ChatFeed({ messages, currentUserId, onLike }: Props) {
+export function ChatFeed({ messages, currentUserId, onLike, onThreadReply }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Only show top-level messages (no parentId) in the main feed
+  const topLevel = messages.filter((m) => !m.parentId);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+  }, [topLevel.length]);
 
-  if (messages.length === 0) {
+  if (topLevel.length === 0) {
     return (
       <motion.div
+        data-testid="chat-feed"
         className="flex-1 flex flex-col items-center justify-center py-16 px-6 text-center"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -36,23 +41,24 @@ export function ChatFeed({ messages, currentUserId, onLike }: Props) {
         <p className="font-mono text-sm text-fire-char/60 uppercase tracking-widest">
           The fire is lit
         </p>
-        <p className="font-mono text-xs text-fire-char/40 mt-1">
-          Be the first to speak
-        </p>
+        <p className="font-mono text-xs text-fire-char/40 mt-1">Be the first to speak</p>
       </motion.div>
     );
   }
 
   const items: Array<{ type: "message"; data: Message } | { type: "ad"; key: string }> = [];
-  messages.forEach((msg, i) => {
+  topLevel.forEach((msg, i) => {
     items.push({ type: "message", data: msg });
-    if ((i + 1) % AD_INTERVAL === 0 && i < messages.length - 1) {
+    if ((i + 1) % AD_INTERVAL === 0 && i < topLevel.length - 1) {
       items.push({ type: "ad", key: `ad-${i}` });
     }
   });
 
   return (
-    <div className="flex-1 overflow-y-auto px-3 py-4 space-y-3 overscroll-contain" data-testid="chat-feed">
+    <div
+      className="flex-1 overflow-y-auto px-1 py-2 space-y-0.5 overscroll-contain"
+      data-testid="chat-feed"
+    >
       <AnimatePresence initial={false}>
         {items.map((item) =>
           item.type === "ad" ? (
@@ -71,6 +77,7 @@ export function ChatFeed({ messages, currentUserId, onLike }: Props) {
               isOwn={item.data.authorId === currentUserId}
               likedByMe={(item.data.likes ?? []).includes(currentUserId)}
               onLike={() => onLike(item.data._id)}
+              onThreadReply={() => onThreadReply(item.data._id)}
             />
           )
         )}
