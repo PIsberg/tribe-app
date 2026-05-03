@@ -1,3 +1,5 @@
+import { TribeAd } from "./TribeAd";
+
 export function TribeManifesto() {
   return (
     <section
@@ -41,6 +43,10 @@ export function TribeManifesto() {
           ephemeral, and belongs entirely to the people in this physical space.
           All messages self-destruct. No logs are kept.
         </p>
+      </div>
+
+      <div className="mt-8">
+        <TribeAd slot={import.meta.env.VITE_ADSENSE_SLOT_MANIFESTO} />
       </div>
     </section>
   );

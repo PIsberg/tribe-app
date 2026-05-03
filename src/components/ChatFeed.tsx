@@ -70,7 +70,7 @@ export function ChatFeed({ messages, currentUserId, onLike, onThreadReply }: Pro
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
             >
-              <TribeAd />
+              <TribeAd slot={import.meta.env.VITE_ADSENSE_SLOT_CHAT} />
             </motion.div>
           ) : (
             <MessageBubble
