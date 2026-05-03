@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import { generateTribeName, generateUserId } from "../utils/tribeNames";
 import { avatarDataUrl } from "../utils/avatar";
 
 export type TribeIdentity = {
@@ -14,22 +13,29 @@ const IDENTITY_KEY = "tribe:identity";
 
 type Stored = Omit<TribeIdentity, "avatarUrl">;
 
+function generateUserId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 function loadOrCreate(): Stored {
   try {
     const raw = localStorage.getItem(IDENTITY_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as Stored;
-      if (parsed.userId && parsed.tribeName && parsed.avatarSeed) {
-        return { ...parsed, nameChosen: parsed.nameChosen ?? false };
+      const parsed = JSON.parse(raw) as Partial<Stored>;
+      if (parsed.userId && parsed.avatarSeed) {
+        return {
+          userId: parsed.userId,
+          tribeName: parsed.tribeName ?? "",
+          avatarSeed: parsed.avatarSeed,
+          nameChosen: parsed.nameChosen ?? false,
+        };
       }
     }
   } catch {
     // corrupt — regenerate
   }
   const userId = generateUserId();
-  const tribeName = generateTribeName();
-  const avatarSeed = `${userId}-${tribeName}`;
-  const fresh: Stored = { userId, tribeName, avatarSeed, nameChosen: false };
+  const fresh: Stored = { userId, tribeName: "", avatarSeed: userId, nameChosen: false };
   localStorage.setItem(IDENTITY_KEY, JSON.stringify(fresh));
   return fresh;
 }

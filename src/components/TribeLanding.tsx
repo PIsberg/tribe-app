@@ -138,7 +138,7 @@ export function TribeLanding({ geo, tribes, onJoin, onCreate }: Props) {
               <CreateTribeForm
                 onSubmit={handleJoinWithName}
                 onCancel={() => setPendingJoin(null)}
-                defaultUserName={identity.tribeName}
+                defaultUserName={identity.nameChosen ? identity.tribeName : ""}
                 nameOnly
               />
             </motion.div>

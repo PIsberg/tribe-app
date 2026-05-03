@@ -35,6 +35,17 @@ function RecenterOnUser({ coords }: { coords: Coords }) {
   return null;
 }
 
+function FitGeofenceOnMount({ coords }: { coords: Coords }) {
+  const map = useMap();
+  useEffect(() => {
+    const bounds = L.latLng(coords.lat, coords.lng).toBounds(GEOFENCE_RADIUS_M * 2);
+    map.fitBounds(bounds, { padding: [24, 24], animate: false });
+    // Run once on mount; subsequent recenters preserve user zoom.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
+
 function InvalidateOnResize({ trigger }: { trigger: unknown }) {
   const map = useMap();
   useEffect(() => {
@@ -83,6 +94,7 @@ export function CampfireMap({ tribes, userCoords, onJoin, onClose }: Props) {
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/">CARTO</a>'
         />
+        <FitGeofenceOnMount coords={userCoords} />
         <RecenterOnUser coords={userCoords} />
         <InvalidateOnResize trigger={maximized} />
 

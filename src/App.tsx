@@ -121,8 +121,8 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
                   identity.setTribeName(userName);
                   setShowNamePicker(false);
                 }}
-                onCancel={() => setShowNamePicker(false)}
-                defaultUserName={identity.tribeName}
+                onCancel={identity.nameChosen ? () => setShowNamePicker(false) : undefined}
+                defaultUserName={identity.nameChosen ? identity.tribeName : ""}
                 nameOnly
               />
             </motion.div>
