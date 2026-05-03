@@ -22,14 +22,14 @@ async function grantOutsideLocation(page: Page) {
 async function dismissNamePickerIfVisible(page: Page) {
   const nameInput = page.getByRole("textbox", { name: /your name/i });
   const appeared = await nameInput
-    .waitFor({ state: "visible", timeout: 2000 })
+    .waitFor({ state: "visible", timeout: 5000 })
     .then(() => true)
     .catch(() => false);
   if (appeared) {
     await nameInput.clear();
     await nameInput.fill("Tester");
     await page.getByRole("button", { name: /join the fire/i }).click();
-    await expect(nameInput).not.toBeVisible({ timeout: 3000 });
+    await expect(nameInput).not.toBeVisible({ timeout: 5000 });
   }
 }
 

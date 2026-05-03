@@ -14,7 +14,6 @@ import { ThreadPanel } from "./components/ThreadPanel";
 import { NearbyTribes } from "./components/NearbyTribes";
 import { CreateTribeForm } from "./components/CreateTribeForm";
 import { useGeolocation } from "./hooks/useGeolocation";
-import { useTribeIdentity } from "./hooks/useTribeIdentity";
 import { useActiveTribe } from "./hooks/useActiveTribe";
 import { haversineDistance, formatDistance, GEOFENCE_RADIUS_M } from "./utils/geo";
 import type { Message } from "./components/MessageBubble";
@@ -317,7 +316,6 @@ function AppShell() {
   const { activeTribeId, setActiveTribeId, confirmedTribeId, setConfirmedTribeId } = useActiveTribe();
   const tribesRaw = useQuery(api.tribes.list);
   const tribes = useMemo(() => tribesRaw ?? [], [tribesRaw]);
-  const identity = useTribeIdentity();
   const autoJoinedRef = useRef(false);
   const geo = useGeolocation();
 
@@ -329,7 +327,7 @@ function AppShell() {
   // Re-evaluates on every watchPosition update, providing continuous monitoring for kicks too.
   const geoGate = useMemo<GeoGate>(() => {
     if (!activeTribeId || !activeTribe) return { status: "ok" };
-    if (geo.status === "denied" || geo.status === "unsupported") return { status: "denied", tribeName: activeTribe.name };
+    if (geo.status === "denied" || geo.status === "unsupported" || geo.status === "error") return { status: "denied", tribeName: activeTribe.name };
     if (geo.status !== "granted" || !geo.coords) return { status: "checking" };
     const dist = haversineDistance(geo.coords.lat, geo.coords.lng, activeTribe.lat, activeTribe.lng);
     if (dist > GEOFENCE_RADIUS_M) return { status: "blocked", tribeName: activeTribe.name, dist };
@@ -373,11 +371,10 @@ function AppShell() {
       .sort((a, b) => (b.lastMessageAt ?? b.createdAt) - (a.lastMessageAt ?? a.createdAt));
     if (nearby.length === 0) return;
     autoJoinedRef.current = true;
-    identity.setTribeName(identity.tribeName);
     const tribeId = nearby[0]._id as string;
     setActiveTribeId(tribeId);
     setConfirmedTribeId(tribeId);
-  }, [geo.status, geo.coords, activeTribeId, tribes, identity, setActiveTribeId, setConfirmedTribeId]);
+  }, [geo.status, geo.coords, activeTribeId, tribes, setActiveTribeId, setConfirmedTribeId]);
 
   const handleJoin = (tribe: Tribe) => {
     const id = tribe._id as string;
