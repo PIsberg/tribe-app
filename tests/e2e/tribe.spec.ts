@@ -6,43 +6,55 @@ async function grantInsideLocation(page: Page) {
   await page.context().grantPermissions(["geolocation"]);
 }
 
-// Helper: place user well outside (e.g. Paris)
+// Helper: place user well outside detection radius (e.g. Paris, ~340 km away)
 async function grantOutsideLocation(page: Page) {
   await page.context().setGeolocation({ latitude: 48.8566, longitude: 2.3522 });
   await page.context().grantPermissions(["geolocation"]);
 }
 
-test.describe("tribe — locked state", () => {
-  test("shows campfire and locating message while requesting location", async ({ page }) => {
-    // Don't grant permissions yet so we see the requesting state
+// Helper: navigate to inner circle, creating a tribe first if none exists
+async function enterInnerCircle(page: Page) {
+  await grantInsideLocation(page);
+  await page.goto("/");
+
+  const innerCircle = page.locator("[data-testid='inner-circle']");
+  const landing = page.locator("[data-testid='tribe-landing']");
+
+  await expect(landing.or(innerCircle)).toBeVisible({ timeout: 10000 });
+
+  if (await landing.isVisible()) {
+    await page.click("[data-testid='create-tribe-btn']");
+    await page.fill("[aria-label='Your name']", "Tester");
+    await page.fill("[aria-label='Tribe name']", "CI Test Tribe");
+    await page.getByText("Light the Fire").click();
+  }
+
+  await expect(innerCircle).toBeVisible({ timeout: 10000 });
+}
+
+test.describe("tribe — landing state", () => {
+  test("shows locating message while requesting location", async ({ page }) => {
+    // Don't grant permissions — should show the requesting state
     await page.goto("/");
-    // The fire background should always be present
-    await expect(page.locator("text=LOCATING SIGNAL")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("text=Reading your signal")).toBeVisible({ timeout: 5000 });
   });
 
-  test("shows walking state when outside geofence", async ({ page }) => {
+  test("shows landing page when outside detection radius", async ({ page }) => {
     await grantOutsideLocation(page);
     await page.goto("/");
-    await expect(page.locator("text=WALKING TO THE TRIBE")).toBeVisible({ timeout: 8000 });
+    await expect(page.locator("[data-testid='tribe-landing']")).toBeVisible({ timeout: 8000 });
   });
 
-  test("distance counter is shown and non-zero when outside", async ({ page }) => {
+  test("shows create campfire button when outside detection radius", async ({ page }) => {
     await grantOutsideLocation(page);
     await page.goto("/");
-    // Should show distance like "333.3km" or "333km"
-    const distanceEl = page.locator("[data-testid='inner-circle']").isHidden();
-    await expect(page.locator("text=WALKING TO THE TRIBE")).toBeVisible({ timeout: 8000 });
-    const kmPattern = /\d+(\.\d+)?(m|km)/;
-    const distanceText = await page.locator(".tabular-nums").textContent();
-    expect(distanceText).toMatch(kmPattern);
+    await expect(page.locator("[data-testid='create-tribe-btn']")).toBeVisible({ timeout: 8000 });
   });
 });
 
 test.describe("tribe — inner circle", () => {
   test.beforeEach(async ({ page }) => {
-    await grantInsideLocation(page);
-    await page.goto("/");
-    await expect(page.locator("[data-testid='inner-circle']")).toBeVisible({ timeout: 10000 });
+    await enterInnerCircle(page);
   });
 
   test("renders the chat feed", async ({ page }) => {
@@ -62,7 +74,6 @@ test.describe("tribe — inner circle", () => {
     await input.fill("Hello tribe!");
     await page.locator("[aria-label='Send message']").click();
 
-    // Message should appear in the feed
     await expect(page.locator("[data-testid='message-bubble']").first()).toBeVisible({ timeout: 3000 });
     await expect(page.locator("text=Hello tribe!")).toBeVisible();
   });
@@ -102,9 +113,7 @@ test.describe("tribe — inner circle", () => {
   });
 
   test("tribe name is shown in the header", async ({ page }) => {
-    // Tribe name follows the pattern: Adjective Noun
     const header = page.locator("header");
-    // The identity chip exists
     await expect(header.locator(".font-mono.text-fire-glow, .font-mono.text-xs")).toBeVisible();
   });
 
@@ -115,11 +124,8 @@ test.describe("tribe — inner circle", () => {
 
 test.describe("tribe — identity persistence", () => {
   test("tribe name persists across page reloads", async ({ page }) => {
-    await grantInsideLocation(page);
-    await page.goto("/");
-    await expect(page.locator("[data-testid='inner-circle']")).toBeVisible({ timeout: 10000 });
+    await enterInnerCircle(page);
 
-    // Capture the tribe name
     const nameEl = page.locator("header .font-mono").last();
     const name1 = await nameEl.textContent();
 
@@ -133,9 +139,7 @@ test.describe("tribe — identity persistence", () => {
 
 test.describe("tribe — ad units", () => {
   test.beforeEach(async ({ page }) => {
-    await grantInsideLocation(page);
-    await page.goto("/");
-    await expect(page.locator("[data-testid='inner-circle']")).toBeVisible({ timeout: 10000 });
+    await enterInnerCircle(page);
   });
 
   test("ad placeholder is visible after 7 messages", async ({ page }) => {
@@ -151,16 +155,12 @@ test.describe("tribe — ad units", () => {
 
 test.describe("tribe — accessibility", () => {
   test("page has a main landmark or section", async ({ page }) => {
-    await grantInsideLocation(page);
-    await page.goto("/");
-    await expect(page.locator("[data-testid='inner-circle']")).toBeVisible({ timeout: 10000 });
+    await enterInnerCircle(page);
     await expect(page.locator("[aria-label='Tribe Manifesto']")).toBeVisible();
   });
 
   test("message input has accessible label", async ({ page }) => {
-    await grantInsideLocation(page);
-    await page.goto("/");
-    await expect(page.locator("[data-testid='inner-circle']")).toBeVisible({ timeout: 10000 });
+    await enterInnerCircle(page);
     await expect(page.locator("[aria-label='Message input']")).toBeVisible();
     await expect(page.locator("[aria-label='Send message']")).toBeVisible();
   });
@@ -169,10 +169,7 @@ test.describe("tribe — accessibility", () => {
 test.describe("tribe — mobile layout", () => {
   test("renders correctly on mobile viewport", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await grantInsideLocation(page);
-    await page.goto("/");
-    await expect(page.locator("[data-testid='inner-circle']")).toBeVisible({ timeout: 10000 });
-    // Chat feed and input should both be on screen
+    await enterInnerCircle(page);
     await expect(page.locator("[data-testid='chat-feed']")).toBeVisible();
     await expect(page.locator("[aria-label='Message input']")).toBeVisible();
   });
