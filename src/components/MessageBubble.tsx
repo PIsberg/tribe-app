@@ -39,17 +39,13 @@ function formatAge(timestamp: number): string {
   return `${Math.floor(mins / 60)}h`;
 }
 
-const URL_REGEX = /https?:\/\/[^\s<>"]+[^\s<>".,;:!?)\]]/g;
-
 function MessageText({ text, textColor }: { text: string; textColor: string }) {
   const parts: Array<{ type: "text" | "link"; value: string }> = [];
   let last = 0;
-  let match: RegExpExecArray | null;
-  URL_REGEX.lastIndex = 0;
-  while ((match = URL_REGEX.exec(text)) !== null) {
-    if (match.index > last) parts.push({ type: "text", value: text.slice(last, match.index) });
+  for (const match of text.matchAll(/https?:\/\/[^\s<>"]+[^\s<>".,;:!?)\]]/g)) {
+    if (match.index! > last) parts.push({ type: "text", value: text.slice(last, match.index) });
     parts.push({ type: "link", value: match[0] });
-    last = match.index + match[0].length;
+    last = match.index! + match[0].length;
   }
   if (last < text.length) parts.push({ type: "text", value: text.slice(last) });
 

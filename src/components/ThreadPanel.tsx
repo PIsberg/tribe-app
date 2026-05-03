@@ -7,6 +7,15 @@ import { MessageBubble, type Message } from "./MessageBubble";
 import { Avatar } from "./Avatar";
 import { avatarDataUrl } from "../utils/avatar";
 
+function formatAge(ts: number): string {
+  const secs = Math.floor((Date.now() - ts) / 1000);
+  if (secs < 30) return "just now";
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins / 60)}h`;
+}
+
 interface Props {
   parentMessage: Message;
   tribeId: Id<"tribes">;
@@ -33,15 +42,6 @@ export function ThreadPanel({
   const [value, setValue] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const parentAvatarUrl = avatarDataUrl(parentMessage.avatarSeed);
-
-  function formatAge(ts: number) {
-    const secs = Math.floor((Date.now() - ts) / 1000);
-    if (secs < 30) return "just now";
-    if (secs < 60) return `${secs}s`;
-    const mins = Math.floor(secs / 60);
-    if (mins < 60) return `${mins}m`;
-    return `${Math.floor(mins / 60)}h`;
-  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

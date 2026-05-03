@@ -16,6 +16,10 @@ function timeAgo(ts: number): string {
   return `${Math.floor(s / 3600)}h ago`;
 }
 
+function isRecentlyActive(lastMessageAt: number | undefined): boolean {
+  return lastMessageAt != null && Date.now() - lastMessageAt < 5 * 60 * 1000;
+}
+
 function makeFireIcon(joinable: boolean) {
   return L.divIcon({
     html: `<div style="font-size:22px;line-height:1;transform:translate(-50%,-50%);filter:${joinable ? "drop-shadow(0 0 6px #ff4500)" : "grayscale(100%) opacity(0.35)"}">🔥</div>`,
@@ -89,7 +93,7 @@ export function CampfireMap({ tribes, userCoords, onJoin, onClose }: Props) {
         {/* Campfire markers */}
         {nearby.map(({ tribe, dist }) => {
           const joinable = dist <= GEOFENCE_RADIUS_M;
-          const isActive = tribe.lastMessageAt != null && Date.now() - tribe.lastMessageAt < 5 * 60 * 1000;
+          const isActive = isRecentlyActive(tribe.lastMessageAt);
           return (
             <Marker
               key={tribe._id}

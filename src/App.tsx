@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useState } from "react";
+import { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
@@ -314,51 +314,32 @@ type GeoGate =
   | { status: "denied"; tribeName: string };
 
 function AppShell() {
-  const { activeTribeId, setActiveTribeId } = useActiveTribe();
+  const { activeTribeId, setActiveTribeId, confirmedTribeId, setConfirmedTribeId } = useActiveTribe();
   const tribesRaw = useQuery(api.tribes.list);
   const tribes = useMemo(() => tribesRaw ?? [], [tribesRaw]);
   const identity = useTribeIdentity();
   const autoJoinedRef = useRef(false);
-  const checkedTribeRef = useRef<string | null>(null);
   const geo = useGeolocation();
-  const [geoGate, setGeoGate] = useState<GeoGate>({ status: "ok" });
-  const [kickedFrom, setKickedFrom] = useState<string | null>(null);
 
   const activeTribe = activeTribeId
     ? tribes.find((t) => (t._id as string) === activeTribeId) ?? null
     : null;
 
+  // Derives gate status purely from current coords — no effect or extra state needed.
+  // Re-evaluates on every watchPosition update, providing continuous monitoring for kicks too.
+  const geoGate = useMemo<GeoGate>(() => {
+    if (!activeTribeId || !activeTribe) return { status: "ok" };
+    if (geo.status === "denied" || geo.status === "unsupported") return { status: "denied", tribeName: activeTribe.name };
+    if (geo.status !== "granted" || !geo.coords) return { status: "checking" };
+    const dist = haversineDistance(geo.coords.lat, geo.coords.lng, activeTribe.lat, activeTribe.lng);
+    if (dist > GEOFENCE_RADIUS_M) return { status: "blocked", tribeName: activeTribe.name, dist };
+    return { status: "ok" };
+  }, [activeTribeId, activeTribe, geo.status, geo.coords]);
+
   // Clear active tribe from state if it expired/disappeared
   useEffect(() => {
     if (activeTribeId && tribes.length > 0 && !activeTribe) setActiveTribeId(null);
   }, [activeTribeId, activeTribe, tribes.length, setActiveTribeId]);
-
-  // Geofence gate: check location before allowing entry
-  useEffect(() => {
-    if (!activeTribeId || !activeTribe) {
-      setGeoGate({ status: "ok" });
-      checkedTribeRef.current = null;
-      return;
-    }
-    if (checkedTribeRef.current === activeTribeId) return; // already checked this tribe
-
-    if (geo.status === "denied" || geo.status === "unsupported") {
-      setGeoGate({ status: "denied", tribeName: activeTribe.name });
-      return;
-    }
-    if (geo.status !== "granted" || !geo.coords) {
-      setGeoGate({ status: "checking" });
-      return;
-    }
-    // geo granted — run the check
-    checkedTribeRef.current = activeTribeId;
-    const dist = haversineDistance(geo.coords.lat, geo.coords.lng, activeTribe.lat, activeTribe.lng);
-    if (dist > GEOFENCE_RADIUS_M) {
-      setGeoGate({ status: "blocked", tribeName: activeTribe.name, dist });
-    } else {
-      setGeoGate({ status: "ok" });
-    }
-  }, [activeTribeId, activeTribe, geo.status, geo.coords]);
 
   // Sync activeTribeId → URL hash
   useEffect(() => {
@@ -393,49 +374,42 @@ function AppShell() {
     if (nearby.length === 0) return;
     autoJoinedRef.current = true;
     identity.setTribeName(identity.tribeName);
-    setActiveTribeId(nearby[0]._id as string);
-  }, [geo.status, geo.coords, activeTribeId, tribes, identity, setActiveTribeId]);
+    const tribeId = nearby[0]._id as string;
+    setActiveTribeId(tribeId);
+    setConfirmedTribeId(tribeId);
+  }, [geo.status, geo.coords, activeTribeId, tribes, identity, setActiveTribeId, setConfirmedTribeId]);
 
-  // Kick user out when they leave the geofence while inside InnerCircle.
-  // The gate entry check already stamped checkedTribeRef so it skips re-entry;
-  // this effect handles every subsequent position update.
-  useEffect(() => {
-    if (geoGate.status !== "ok" || !activeTribe || geo.status !== "granted" || !geo.coords) return;
-    const dist = haversineDistance(geo.coords.lat, geo.coords.lng, activeTribe.lat, activeTribe.lng);
-    if (dist > GEOFENCE_RADIUS_M) {
-      const name = activeTribe.name;
-      checkedTribeRef.current = null;
-      setGeoGate({ status: "ok" });
-      setActiveTribeId(null);
-      setKickedFrom(name);
-    }
-  }, [geo.coords, geo.status, geoGate.status, activeTribe, setActiveTribeId]);
-
-  const handleJoin = (tribe: Tribe) => setActiveTribeId(tribe._id as string);
-  const handleCreate = (tribeId: string) => setActiveTribeId(tribeId);
-  const handleLeave = () => {
-    setActiveTribeId(null);
-    setGeoGate({ status: "ok" });
-    checkedTribeRef.current = null;
+  const handleJoin = (tribe: Tribe) => {
+    const id = tribe._id as string;
+    setActiveTribeId(id);
+    setConfirmedTribeId(id);
   };
-  const handleJoinOther = (tribe: Tribe) => setActiveTribeId(tribe._id as string);
+  const handleCreate = (tribeId: string) => {
+    setActiveTribeId(tribeId);
+    setConfirmedTribeId(tribeId);
+  };
+  const handleLeave = useCallback(() => {
+    setActiveTribeId(null);
+    setConfirmedTribeId(null);
+  }, [setActiveTribeId, setConfirmedTribeId]);
+  const handleJoinOther = (tribe: Tribe) => {
+    const id = tribe._id as string;
+    setActiveTribeId(id);
+    setConfirmedTribeId(id);
+  };
+
+  // True when the user was confirmed inside this tribe but has now drifted out.
+  const hasDrifted =
+    confirmedTribeId !== null &&
+    confirmedTribeId === activeTribeId &&
+    geoGate.status === "blocked";
 
   const screen = !activeTribe ? "landing" : geoGate.status === "ok" ? "inner" : "gate";
 
   return (
     <div className="relative flex flex-col min-h-[100dvh] max-w-lg mx-auto w-full">
       <AnimatePresence mode="wait">
-        {kickedFrom ? (
-          <motion.div
-            key="kicked"
-            className="relative flex flex-col flex-1 min-h-[100dvh]"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <KickedOutScreen tribeName={kickedFrom} onDismiss={() => setKickedFrom(null)} />
-          </motion.div>
-        ) : screen === "landing" ? (
+        {screen === "landing" ? (
           <TribeLanding
             key="landing"
             geo={geo}
@@ -452,7 +426,10 @@ function AppShell() {
             exit={{ opacity: 0 }}
           >
             {geoGate.status === "checking" && <GeoCheckingScreen />}
-            {geoGate.status === "blocked" && (
+            {geoGate.status === "blocked" && hasDrifted && (
+              <KickedOutScreen tribeName={geoGate.tribeName} onDismiss={handleLeave} />
+            )}
+            {geoGate.status === "blocked" && !hasDrifted && (
               <TooFarScreen tribeName={geoGate.tribeName} dist={geoGate.dist} onBack={handleLeave} />
             )}
             {geoGate.status === "denied" && (
