@@ -1,0 +1,37 @@
+@startuml geofence-gate
+!theme plain
+skinparam defaultFontName monospace
+skinparam ActivityFontSize 13
+
+start
+
+:App loads — activeTribeId present;
+
+if (tribe found in\nConvex list?) then (no)
+  #LightGray:Landing screen;
+  stop
+else (yes)
+  if (geo.status?) then (denied /\nunsupported)
+    #Pink:GeoRequiredScreen\n""Location required"";
+    stop
+  elseif (status == granted\n&& coords available?) then (no)
+    #LightBlue:GeoCheckingScreen\n""Locating you..."";
+    stop
+  else (yes)
+    :haversineDistance\n(user ↔ tribe.lat/lng);
+    if (dist > 5 000 m?) then (yes — outside)
+      if (confirmedTribeId ==\nactiveTribeId?) then (yes — drifted)
+        #Orange:KickedOutScreen\n""You've left the fire""\nauto-dismiss after 4 s;
+      else (no — blocked at entry)
+        #Orange:TooFarScreen\n""Too far from the fire""\n+ distance shown;
+      endif
+      stop
+    else (no — inside)
+      #LightGreen:InnerCircle\n(set confirmedTribeId);
+      :chat, threads,\nimage upload, nearby fires;
+      stop
+    endif
+  endif
+endif
+
+@enduml

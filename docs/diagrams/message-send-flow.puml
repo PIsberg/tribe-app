@@ -1,0 +1,43 @@
+@startuml message-send-flow
+!theme plain
+skinparam defaultFontName monospace
+skinparam sequenceMessageAlign center
+
+actor        "User"           as U
+participant  "MessageInput"   as MI
+participant  "Convex Client"  as CC
+participant  "messages.ts"    as MS
+database     "Convex DB"      as DB
+collections  "Convex Storage" as CS
+
+group Text message
+  U  -> MI : type + Enter / Send
+  MI -> CC : useMutation(send)
+  CC -> MS : { tribeId, text, author,\n  authorId, avatarSeed }
+  MS -> DB : insert message\n{ likes:[], timestamp: now }
+  MS -> DB : patch tribe.lastMessageAt
+  DB --> CC : real-time push\nto all useQuery subscribers
+end
+
+group Image message
+  U  -> MI : attach image file
+  MI -> CC : useMutation(generateUploadUrl)
+  CC -> MS : returns presigned URL
+  MI -> CS : PUT image/jpeg
+  CS --> MI : storageId
+  MI -> CC : useMutation(send, { storageId })
+  CC -> MS : insert message + storageId
+  MS -> CS : getUrl(storageId) at query time
+  CS --> CC : signed imageUrl
+  DB --> CC : push includes imageUrl
+end
+
+group Thread reply
+  U  -> MI : reply in ThreadPanel
+  MI -> CC : useMutation(send, { parentId })
+  CC -> MS : insert with parentId
+  MS -> DB : patch parent.replyCount += 1
+  DB --> CC : push to thread\nand feed subscribers
+end
+
+@enduml

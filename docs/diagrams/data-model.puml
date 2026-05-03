@@ -1,0 +1,54 @@
+@startuml data-model
+!theme plain
+skinparam defaultFontName monospace
+
+entity "**tribes**" as T {
+  _id         : Id<"tribes">
+  ==
+  name        : string
+  creatorId   : string
+  lat         : number
+  lng         : number
+  createdAt   : number
+  --
+  lastMessageAt : number?
+}
+
+entity "**messages**" as M {
+  _id         : Id<"messages">
+  ==
+  tribeId     : Id<"tribes">
+  text        : string
+  author      : string
+  authorId    : string
+  timestamp   : number
+  avatarSeed  : string
+  likes       : string[]
+  --
+  parentId    : Id<"messages">?
+  replyCount  : number?
+  storageId   : Id<"_storage">?
+}
+
+entity "**_storage**\n(Convex built-in)" as S {
+  _id : Id<"_storage">
+  ==
+  contentType : string
+  size        : number
+}
+
+T ||--o{ M : "  has messages  "
+M }o--o{ M : "  thread replies\n  (parentId)  "
+M }o--o| S : "  image upload  "
+
+note bottom of T
+  TTL: 24 hours
+  purged by cron (1 hr interval)
+end note
+
+note bottom of M
+  TTL: 30 minutes
+  purged by cron (5 min interval)
+end note
+
+@enduml
