@@ -54,7 +54,7 @@ a = sin²(Δlat/2) + cos(lat₁)·cos(lat₂)·sin²(Δlon/2)
 d = 2R · atan2(√a, √(1−a))     where R = 6 371 000 m
 ```
 
-`GEOFENCE_RADIUS_M = 5000` (5 km). The same radius is drawn as a dashed ring on the campfire map.
+`GEOFENCE_RADIUS_M = 1500` (1.5 km). The same radius is drawn as a dashed ring on the campfire map.
 
 The `useGeolocation` hook:
 1. Calls `getCurrentPosition` immediately for a fast initial fix
@@ -181,8 +181,8 @@ No login. On first visit `useTribeIdentity` generates:
 
 - **Geofence ring** — dashed `Circle` with `radius = GEOFENCE_RADIUS_M` centered on the user
 - **User marker** — custom `divIcon` blue dot
-- **Campfire markers** — 🔥 emoji icons; greyed-out when outside 5 km
-- **Popup** — tribe name, distance, activity status, "Join fire 🔥" button (only enabled within 5 km)
+- **Campfire markers** — 🔥 emoji icons; greyed-out when outside 1.5 km
+- **Popup** — tribe name, distance, activity status, "Join fire 🔥" button (only enabled within 1.5 km)
 - **Discovery radius** — only fires within 50 km are shown on the map
 
 `RecenterOnUser` is a sub-component that calls `map.setView()` whenever GPS coordinates update.
@@ -198,7 +198,7 @@ App
 └── AppShell
     ├── AnimatePresence (mode="wait")
     │   ├── TribeLanding         ← screen: "landing"
-    │   │   ├── NearbyTribes     # list of campfires within 5 km
+    │   │   ├── NearbyTribes     # list of campfires within 1.5 km
     │   │   ├── CampfireMap      # Leaflet map (toggle)
     │   │   └── CreateTribeForm  # light a new fire
     │   │

@@ -86,7 +86,7 @@ export function CampfireMap({ tribes, userCoords, onJoin, onClose }: Props) {
         <RecenterOnUser coords={userCoords} />
         <InvalidateOnResize trigger={maximized} />
 
-        {/* 5km geofence ring */}
+        {/* Geofence ring */}
         <Circle
           center={[userCoords.lat, userCoords.lng]}
           radius={GEOFENCE_RADIUS_M}
