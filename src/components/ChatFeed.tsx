@@ -25,6 +25,7 @@ export function ChatFeed({ messages, currentUserId, onLike, onThreadReply }: Pro
   if (topLevel.length === 0) {
     return (
       <motion.div
+        data-testid="chat-feed"
         className="flex-1 flex flex-col items-center justify-center py-16 px-6 text-center"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

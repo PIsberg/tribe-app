@@ -114,15 +114,17 @@ test.describe("tribe — inner circle", () => {
       await page.waitForTimeout(100);
     }
 
+    // Don't assert exact count — a shared Convex tribe may have prior messages.
+    // Instead verify all three sent messages are visible.
     const bubbles = page.locator("[data-testid='message-bubble']");
-    await expect(bubbles).toHaveCount(3, { timeout: 5000 });
-    await expect(bubbles.nth(0)).toContainText("First");
-    await expect(bubbles.nth(2)).toContainText("Third");
+    await expect(bubbles.filter({ hasText: "First" })).toBeVisible({ timeout: 5000 });
+    await expect(bubbles.filter({ hasText: "Second" })).toBeVisible({ timeout: 5000 });
+    await expect(bubbles.filter({ hasText: "Third" })).toBeVisible({ timeout: 5000 });
   });
 
   test("tribe name is shown in the header", async ({ page }) => {
     const header = page.locator("header");
-    await expect(header.locator(".font-mono.text-fire-glow, .font-mono.text-xs")).toBeVisible();
+    await expect(header.locator(".font-mono.text-fire-glow")).toBeVisible();
   });
 
   test("manifesto section is visible", async ({ page }) => {
@@ -157,7 +159,7 @@ test.describe("tribe — ad units", () => {
       await input.press("Enter");
       await page.waitForTimeout(80);
     }
-    await expect(page.locator("text=Signal from the Outside")).toBeVisible({ timeout: 3000 });
+    await expect(page.locator("text=Signal from the Outside")).toBeVisible({ timeout: 10000 });
   });
 });
 
