@@ -15,6 +15,7 @@ export function MessageInput({ onSend, disabled, tribeName }: Props) {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const generateUploadUrl = useMutation(api.messages.generateUploadUrl);
@@ -23,6 +24,7 @@ export function MessageInput({ onSend, disabled, tribeName }: Props) {
     const text = value.trim();
     if ((!text && !imageFile) || disabled || uploading) return;
     setUploading(true);
+    setError(null);
     try {
       let storageId: Id<"_storage"> | undefined;
       if (imageFile) {
@@ -32,15 +34,23 @@ export function MessageInput({ onSend, disabled, tribeName }: Props) {
           headers: { "Content-Type": imageFile.type },
           body: imageFile,
         });
-        if (!res.ok) throw new Error("Upload failed");
-        const { storageId: sid } = await res.json() as { storageId: Id<"_storage"> };
-        storageId = sid;
+        if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+        const json = (await res.json()) as { storageId?: Id<"_storage"> };
+        if (!json.storageId) throw new Error("Upload returned no storageId");
+        storageId = json.storageId;
       }
-      onSend(text, storageId);
+      const sendResult = onSend(text, storageId) as unknown;
       setValue("");
       setImageFile(null);
       setImagePreview(null);
       inputRef.current?.focus();
+      if (sendResult && typeof (sendResult as Promise<unknown>).then === "function") {
+        (sendResult as Promise<unknown>).catch((err: unknown) => {
+          setError(err instanceof Error ? err.message : "Failed to send");
+        });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to send");
     } finally {
       setUploading(false);
     }
@@ -73,7 +83,7 @@ export function MessageInput({ onSend, disabled, tribeName }: Props) {
     setImagePreview(null);
   };
 
-  const canSend = (value.trim() || imageFile) && !uploading;
+  const canSend = Boolean(value.trim() || imageFile) && !uploading;
 
   return (
     <motion.form
@@ -84,6 +94,17 @@ export function MessageInput({ onSend, disabled, tribeName }: Props) {
       transition={{ delay: 0.3, duration: 0.4 }}
     >
       <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            role="alert"
+            className="text-[11px] text-fire-ember font-mono px-2 py-1 rounded-md bg-fire-ember/10 border border-fire-ember/30"
+          >
+            ⚠ {error}
+          </motion.div>
+        )}
         {imagePreview && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}

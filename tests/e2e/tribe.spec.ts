@@ -107,11 +107,14 @@ test.describe("tribe — inner circle", () => {
 
   test("can type and send a message", async ({ page }) => {
     const input = page.locator("[aria-label='Message input']");
-    await input.fill("Hello tribe!");
+    const unique = `Hello tribe! ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    await input.fill(unique);
     await page.locator("[aria-label='Send message']").click();
 
     await expect(page.locator("[data-testid='message-bubble']").first()).toBeVisible({ timeout: 3000 });
-    await expect(page.locator("text=Hello tribe!")).toBeVisible();
+    await expect(
+      page.locator("[data-testid='message-bubble']").filter({ hasText: unique }).last(),
+    ).toBeVisible({ timeout: 3000 });
   });
 
   test("clears input after sending", async ({ page }) => {
@@ -123,9 +126,12 @@ test.describe("tribe — inner circle", () => {
 
   test("sends message on Enter key", async ({ page }) => {
     const input = page.locator("[aria-label='Message input']");
-    await input.fill("Enter key test");
+    const unique = `Enter key test ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    await input.fill(unique);
     await input.press("Enter");
-    await expect(page.locator("text=Enter key test")).toBeVisible({ timeout: 3000 });
+    await expect(
+      page.locator("[data-testid='message-bubble']").filter({ hasText: unique }).last(),
+    ).toBeVisible({ timeout: 3000 });
   });
 
   test("send button is disabled with empty input", async ({ page }) => {
@@ -222,9 +228,12 @@ test.describe("tribe — message features", () => {
 
   test("URLs in messages become clickable links", async ({ page }) => {
     const input = page.locator("[aria-label='Message input']");
-    await input.fill("Check this out https://example.com cool right");
+    const tag = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    await input.fill(`Check this out ${tag} https://example.com cool right`);
     await input.press("Enter");
-    await expect(page.locator("a[href='https://example.com']")).toBeVisible({ timeout: 5000 });
+    const bubble = page.locator("[data-testid='message-bubble']").filter({ hasText: tag }).last();
+    await expect(bubble).toBeVisible({ timeout: 5000 });
+    await expect(bubble.locator("a[href='https://example.com']")).toBeVisible();
   });
 
   test("image attach button is visible", async ({ page }) => {
