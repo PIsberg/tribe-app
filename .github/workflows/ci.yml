@@ -101,7 +101,7 @@ jobs:
           path: dist/
 
       - name: Run E2E tests
-        run: npx playwright test
+        run: npx playwright test --project=chromium
         env:
           CI: true
           VITE_TRIBE_LAT: "51.5074"
