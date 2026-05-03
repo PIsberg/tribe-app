@@ -12,27 +12,32 @@ async function grantOutsideLocation(page: Page) {
   await page.context().grantPermissions(["geolocation"]);
 }
 
-// Helper: navigate to inner circle, creating a tribe first if none exists
+// Helper: navigate to inner circle, creating a tribe first if none exists.
+// Strategy: wait for auto-join FIRST (up to 10 s) so Convex has time to
+// return the tribes list before we decide to create. Attempting to fill the
+// create-form while tribes are still loading causes a race where auto-join
+// fires mid-form and unmounts the form.
 async function enterInnerCircle(page: Page) {
   await grantInsideLocation(page);
   await page.goto("/");
 
   const innerCircle = page.locator("[data-testid='inner-circle']");
-  const createBtn = page.locator("[data-testid='create-tribe-btn']");
 
-  // Wait for either auto-join (inner-circle visible) or no nearby tribe (create button visible).
-  // Checking the create button — not the landing wrapper — avoids a race where the app
-  // auto-joins between the landing.isVisible() check and the subsequent fill() call.
-  await expect(innerCircle.or(createBtn)).toBeVisible({ timeout: 12000 });
+  const autoJoined = await innerCircle
+    .waitFor({ state: "visible", timeout: 10000 })
+    .then(() => true)
+    .catch(() => false);
 
-  if (await createBtn.isVisible()) {
+  if (!autoJoined) {
+    // Tribes are loaded and none are nearby — safe to create one.
+    const createBtn = page.locator("[data-testid='create-tribe-btn']");
+    await expect(createBtn).toBeVisible({ timeout: 5000 });
     await createBtn.click();
     await page.getByRole("textbox", { name: /your name/i }).fill("Tester");
     await page.getByRole("textbox", { name: /tribe name/i }).fill("CI Test Tribe");
     await page.getByRole("button", { name: /light the fire/i }).click();
+    await expect(innerCircle).toBeVisible({ timeout: 15000 });
   }
-
-  await expect(innerCircle).toBeVisible({ timeout: 15000 });
 }
 
 test.describe("tribe — landing state", () => {
