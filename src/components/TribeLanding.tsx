@@ -5,6 +5,7 @@ import { api } from "../../convex/_generated/api";
 import type { Doc } from "../../convex/_generated/dataModel";
 import { CreateTribeForm } from "./CreateTribeForm";
 import { NearbyTribes } from "./NearbyTribes";
+import { CampfireMap } from "./CampfireMap";
 import { useTribeIdentity } from "../hooks/useTribeIdentity";
 import type { GeoState } from "../hooks/useGeolocation";
 
@@ -21,6 +22,7 @@ export function TribeLanding({ geo, tribes, onJoin, onCreate }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [pendingJoin, setPendingJoin] = useState<Tribe | null>(null);
+  const [showMap, setShowMap] = useState(false);
   const createTribe = useMutation(api.tribes.create);
   const identity = useTribeIdentity();
 
@@ -166,9 +168,33 @@ export function TribeLanding({ geo, tribes, onJoin, onCreate }: Props) {
           )}
         </AnimatePresence>
 
-        {/* Nearby tribes */}
+        {/* Nearby tribes + map toggle */}
         {hasLocation && !showForm && geo.coords && (
-          <NearbyTribes tribes={tribes} userCoords={geo.coords} onJoin={handleJoin} />
+          <>
+            <AnimatePresence mode="wait">
+              {showMap ? (
+                <CampfireMap
+                  key="map"
+                  tribes={tribes}
+                  userCoords={geo.coords}
+                  onJoin={(tribe) => { setShowMap(false); handleJoin(tribe); }}
+                  onClose={() => setShowMap(false)}
+                />
+              ) : (
+                <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <NearbyTribes tribes={tribes} userCoords={geo.coords} onJoin={handleJoin} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <div className="flex justify-center mt-3">
+              <button
+                onClick={() => setShowMap((v) => !v)}
+                className="font-mono text-[10px] uppercase tracking-widest text-fire-char/40 hover:text-fire-glow/60 transition-colors px-3 py-1.5 rounded-lg hover:bg-fire-ash/30 border border-fire-char/15 hover:border-fire-char/30"
+              >
+                {showMap ? "📋 List" : "🗺️ Map"}
+              </button>
+            </div>
+          </>
         )}
       </motion.div>
     </motion.div>

@@ -1,0 +1,31 @@
+@startuml system-overview
+!theme plain
+skinparam componentStyle rectangle
+skinparam defaultFontName monospace
+skinparam backgroundColor #FEFEFE
+
+package "Browser" {
+  component "React SPA\n(Vite + TypeScript)" as spa
+  component "Geolocation API\nwatchPosition" as geo
+  database "localStorage\nidentity + activeTribeId" as ls
+}
+
+package "Convex Cloud" {
+  component "tribes.ts\nlist, create" as tribes_fn
+  component "messages.ts\nlist, send, toggleLike\ngenerateUploadUrl" as msgs_fn
+  database "Convex DB\ntribes + messages" as db
+  storage "Convex File Storage\nuploaded images" as fstore
+  component "crons.ts\n· purge messages (5 min)\n· purge tribes (1 hr)" as crons
+}
+
+spa --> geo        : watchPosition\ncontinuous GPS
+spa --> ls         : read/write identity
+spa --> tribes_fn  : useQuery list\nuseMutation create
+spa --> msgs_fn    : useQuery list\nuseMutation send / like
+spa --> fstore     : PUT image\ndirect upload
+msgs_fn --> db     : read / write
+tribes_fn --> db   : read / write
+crons --> db       : delete expired rows
+msgs_fn --> fstore : getUrl / delete
+
+@enduml

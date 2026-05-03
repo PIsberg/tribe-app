@@ -10,6 +10,7 @@ interface Props {
   memberCount?: number;
   nearbyCount?: number;
   onShowNearby?: () => void;
+  onEditName?: () => void;
 }
 
 export function TribeHeader({
@@ -20,6 +21,7 @@ export function TribeHeader({
   memberCount,
   nearbyCount,
   onShowNearby,
+  onEditName,
 }: Props) {
   const shareUrl = `${window.location.origin}${window.location.pathname}#${tribeId}`;
 
@@ -92,13 +94,17 @@ export function TribeHeader({
         </button>
       )}
 
-      {/* Identity chip */}
-      <div className="flex items-center gap-1.5 bg-fire-ash/50 rounded-lg px-2 py-1.5 border border-fire-char/30 flex-shrink-0">
+      {/* Identity chip — tap to rename */}
+      <button
+        onClick={onEditName}
+        className="flex items-center gap-1.5 bg-fire-ash/50 rounded-lg px-2 py-1.5 border border-fire-char/30 flex-shrink-0 hover:border-fire-ember/40 transition-colors"
+        title="Change your name"
+      >
         <Avatar url={identity.avatarUrl} name={identity.tribeName} size={20} />
         <span className="font-mono text-xs text-fire-glow font-bold truncate max-w-[80px]">
           {identity.tribeName}
         </span>
-      </div>
+      </button>
     </motion.header>
   );
 }

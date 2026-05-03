@@ -1,173 +1,191 @@
 # Architecture: tribe 🔥
 
-This document describes how the app works end-to-end — data flow, component hierarchy, geofencing logic, the message heat system, and the Convex backend design.
+End-to-end breakdown of data flow, component hierarchy, geofencing logic, the message lifecycle, and the Convex backend design.
+
+PlantUML sources for all diagrams live in [`docs/diagrams/`](./docs/diagrams/). Regenerate PNGs with `node docs/diagrams/generate.js`.
 
 ---
 
-## High-Level Overview
+## System Overview
 
-```
-Browser (React SPA)
-│
-├── Geolocation API  ──►  useGeolocation hook  ──►  Inside / Outside decision
-│
-├── localStorage  ──►  useTribeIdentity hook  ──►  Tribe Name + Avatar
-│
-├── MockConvexProvider (dev)  ──►  In-memory messages
-│    or
-│   Convex SDK  ──►  convex/messages.ts  ──►  Supabase-like real-time sync
-│
-└── React tree  ──►  AnimatePresence state machine  ──►  Locked / Inner Circle / Lost Signal
-```
+![System Overview](docs/diagrams/system-overview.png)
+
+The app is a React SPA that communicates exclusively with Convex — no custom backend server. Three subsystems interact in the browser:
+
+- **Geolocation API** — `navigator.geolocation.watchPosition` pushes GPS updates continuously; the `useGeolocation` hook converts them into a typed `GeoState`.
+- **localStorage** — `useActiveTribe` persists the active tribe ID and confirmed-entry flag; `useTribeIdentity` persists the generated display name and avatar seed.
+- **Convex SDK** — `useQuery` opens a live WebSocket subscription for the tribes list and message feed; `useMutation` runs server-side mutations for send, like, and create.
+
+Image uploads bypass Convex function calls: the client fetches a presigned upload URL via `generateUploadUrl`, then PUTs the file directly to Convex File Storage and stores only the returned `storageId` in the message document.
 
 ---
 
-## State Machine
+## Screen State Machine
 
-The root `App` component manages a simple visual state machine with four states:
+![Screen Flow](docs/diagrams/screen-flow.png)
+
+`AppShell` renders one of three top-level screens based on two reactive signals:
+
+| Signal | Source |
+|---|---|
+| `activeTribeId` | `useActiveTribe` hook (localStorage + URL hash) |
+| `geoGate` | `useMemo` over `geo.status` + `geo.coords` + active tribe coords |
 
 ```
-         ┌──────────────────────────────────────────────────┐
-         │                   App States                     │
-         │                                                  │
-  start  │   requesting   ──►   granted + outside          │
-    ──►  │      (idle)           (LockedState)              │
-         │         │                 │                      │
-         │         ▼                 ▼ enter 300m           │
-         │    denied/error      granted + inside            │
-         │   (LockedState)      (InnerCircle)               │
-         │                           │                      │
-         │                           ▼ walk out             │
-         │                      LostSignal (4s)             │
-         │                           │                      │
-         │                           ▼                      │
-         │                      LockedState                 │
-         └──────────────────────────────────────────────────┘
+screen = !activeTribe           → "landing"
+screen = geoGate.status == "ok" → "inner"
+screen = otherwise              → "gate"
 ```
 
-State transitions are driven by `useGeolocation`, which uses the browser's `navigator.geolocation.watchPosition` API and runs every time GPS updates (at most every 30 seconds via `maximumAge`).
+`geoGate` is a **pure derivation** (no `useEffect`, no separate state). Convex's `watchPosition` fires on every GPS update, which re-renders the component and re-evaluates the memo — this is how auto-kick works with no polling loop.
+
+The `confirmedTribeId` flag (stored in `useActiveTribe`) distinguishes a **drift-kick** (user was confirmed inside, then moved away → `KickedOutScreen`) from an **entry block** (user clicked a shared link from far away → `TooFarScreen`).
 
 ---
 
-## Geofencing Logic
+## Geofence Gate Logic
 
-**File:** `src/utils/geo.ts`, `src/hooks/useGeolocation.ts`
+![Geofence Gate](docs/diagrams/geofence-gate.png)
 
-Distance is computed using the **Haversine formula** — great-circle distance on a sphere:
+Distance is computed with the **Haversine formula** — great-circle distance on a sphere:
 
 ```
-a = sin²(Δlat/2) + cos(lat1)·cos(lat2)·sin²(Δlon/2)
-distance = 2R · atan2(√a, √(1−a))
+a = sin²(Δlat/2) + cos(lat₁)·cos(lat₂)·sin²(Δlon/2)
+d = 2R · atan2(√a, √(1−a))     where R = 6 371 000 m
 ```
 
-Where `R = 6,371,000 m` (Earth radius). The result is compared to `GEOFENCE_RADIUS_M = 300`.
+`GEOFENCE_RADIUS_M = 5000` (5 km). The same radius is drawn as a dashed ring on the campfire map.
 
-The hook:
-1. Calls `getCurrentPosition` once immediately
-2. Registers `watchPosition` with `enableHighAccuracy: true` and `maximumAge: 30000`
-3. Every position update re-computes Haversine distance and updates `inside: boolean`
-
-**Walk-out detection:** `App.tsx` keeps a `wasInsideRef` flag. When `inside` flips `true → false` (and status is `granted`), the `LostSignal` overlay is shown for 4 seconds before falling back to `LockedState`.
+The `useGeolocation` hook:
+1. Calls `getCurrentPosition` immediately for a fast initial fix
+2. Registers `watchPosition` with `enableHighAccuracy: true`, `maximumAge: 30 000 ms`
+3. Every position update propagates through `geoGate` useMemo → potential screen transition
 
 ---
 
-## Identity System
+## Data Model
 
-**File:** `src/hooks/useTribeIdentity.ts`
+![Data Model](docs/diagrams/data-model.png)
 
-No login. On first visit:
-
-1. A `userId` is generated as `${Date.now().toString(36)}-${random}` (collision probability negligible)
-2. A `tribeName` is generated by sampling one of 30 adjectives × 28 nouns = **840 combinations**
-3. Both are persisted in `localStorage` under the key `tribe:identity`
-4. An `avatarSeed` (`${userId}-${tribeName}`) is derived deterministically
-
-**Avatar generation** (`src/utils/avatar.ts`): The seed string is hashed with DJB2 to produce a deterministic integer. Hue values and polygon vertex radii are extracted from different bit ranges, producing a unique-looking SVG polygon for every name. The output is base64-encoded into a `data:image/svg+xml` URL — no network request needed.
-
----
-
-## Message Architecture
-
-### Data Model (Convex schema)
+### Schema
 
 ```typescript
-messages: {
-  text:       string      // message body
-  author:     string      // tribe name
-  authorId:   string      // local userId
-  timestamp:  number      // Unix ms
-  avatarSeed: string      // for avatar re-generation
+// convex/schema.ts
+tribes: {
+  name:          string
+  creatorId:     string
+  lat:           number
+  lng:           number
+  createdAt:     number
+  lastMessageAt: number?          // used for "recently active" badge
 }
-// Index: by_timestamp (for range queries)
+// Index: by_createdAt
+
+messages: {
+  tribeId:    Id<"tribes">
+  text:       string
+  author:     string              // display name at send time
+  authorId:   string              // stable userId from localStorage
+  timestamp:  number
+  avatarSeed: string
+  likes:      string[]            // array of userIds
+  parentId:   Id<"messages">?    // set for thread replies
+  replyCount: number?             // denormalised counter on parent
+  storageId:  Id<"_storage">?    // present when message has an image
+}
+// Indexes: by_tribeId_and_timestamp, by_timestamp, by_parentId_and_timestamp
 ```
+
+### TTL
+
+| Table | TTL | Cron interval |
+|---|---|---|
+| `messages` | 30 minutes | every 5 minutes |
+| `tribes` | 24 hours | every 1 hour |
+
+Expired rows are batch-deleted by `deleteOldMessages` and `deleteOldTribes` (internal mutations). Associated storage objects are deleted alongside their message.
 
 ### Convex Functions
 
-| Function              | Type             | Description                                        |
-|-----------------------|------------------|----------------------------------------------------|
-| `messages.list`       | `query`          | Returns messages from the last 30 minutes          |
-| `messages.send`       | `mutation`       | Inserts a new message with current timestamp       |
-| `messages.deleteOldMessages` | `internalMutation` | Deletes messages older than 30 minutes    |
+| Function | Type | Description |
+|---|---|---|
+| `tribes.list` | query | All tribes created within the last 24 h |
+| `tribes.create` | mutation | Insert tribe at creator's coordinates |
+| `messages.list` | query | Messages for a tribe from the last 30 min; resolves `imageUrl` |
+| `messages.listThread` | query | Replies for a parent message |
+| `messages.send` | mutation | Insert message; increment parent `replyCount`; update tribe `lastMessageAt` |
+| `messages.toggleLike` | mutation | Add or remove userId from `likes` array |
+| `messages.generateUploadUrl` | mutation | Returns a presigned PUT URL for Convex Storage |
+| `messages.deleteOldMessages` | internalMutation | Batch-delete + storage cleanup |
+| `tribes.deleteOldTribes` | internalMutation | Batch-delete expired tribes |
 
-The `list` query is subscribed to by the client via `useQuery(api.messages.list)`. Convex re-runs the query and pushes an update to all subscribers whenever the `messages` table changes — no WebSocket boilerplate needed.
+---
 
-### Cron Job (Self-Destruct)
+## Message Lifecycle
 
-**File:** `convex/crons.ts`
+![Message Send Flow](docs/diagrams/message-send-flow.png)
 
-```
-Every 5 minutes → deleteOldMessages
-  → DELETE FROM messages WHERE timestamp < (now - 30min)
-```
+### Text message
 
-This runs server-side. Even if the last client disconnects, old messages are purged.
+1. User types in `MessageInput` and presses Enter or the send button.
+2. `useMutation(api.messages.send)` is called with `{ tribeId, text, author, authorId, avatarSeed }`.
+3. The Convex mutation inserts the document and patches `tribe.lastMessageAt`.
+4. Convex pushes the updated query result to **all active subscribers** in real time — no polling, no WebSocket boilerplate.
 
-### Mock Mode (No Convex)
+### Image message
 
-Without `VITE_CONVEX_URL`, `MockConvexProvider` (`src/lib/MockConvexProvider.tsx`) provides an identical interface using React state. Messages exist only in memory for the current session. A `setInterval` runs every 60 seconds to mirror the 30-minute purge.
+1. User taps the 📷 button; a preview thumbnail appears.
+2. `generateUploadUrl()` fetches a short-lived presigned URL from Convex Storage.
+3. The client PUTs the file directly to Convex Storage (bypassing Convex functions entirely).
+4. The returned `storageId` is passed as an extra argument to `send`.
+5. The `list` query resolves `storageId → imageUrl` via `ctx.storage.getUrl()` so subscribers receive a signed URL.
+
+### Thread reply
+
+A reply is a normal message with `parentId` set. The mutation also increments `parent.replyCount` (denormalised) so the feed can show reply counts without a secondary query.
 
 ---
 
 ## Message Heat System
 
-**File:** `src/components/MessageBubble.tsx`
+`MessageBubble` derives a "heat" property from message age at render time:
 
-Messages have a "heat" property derived from age at render time:
+| Age | Heat | Visual |
+|---|---|---|
+| < 2.5 min | `hot` | Orange glow border + pulsing 🔥 |
+| 2.5 – 5 min | `warm` | Dimmer border, reduced opacity |
+| > 5 min | `cold` | Charcoal grey, 50 % opacity |
+| > 30 min | gone | Deleted by Convex cron |
 
-| Age             | Heat   | Visual effect                              |
-|-----------------|--------|--------------------------------------------|
-| < 2.5 minutes   | `hot`  | Orange glow border + pulsing 🔥 icon       |
-| 2.5 – 5 min     | `warm` | Dimmer border, reduced opacity             |
-| > 5 minutes     | `cold` | Charcoal grey, 50% opacity                 |
-| > 30 minutes    | gone   | Deleted by Convex cron / MockProvider GC   |
-
-Heat is re-computed on every render pass (no separate ticker needed — React re-renders from Convex subscription updates keep it fresh).
+Heat re-computes on every render pass — Convex subscription updates provide the clock ticks.
 
 ---
 
-## Ad Injection
+## Identity System
 
-**File:** `src/components/ChatFeed.tsx`, `src/components/TribeAd.tsx`
+No login. On first visit `useTribeIdentity` generates:
 
-The `ChatFeed` component builds a flat array of `{ type: "message" | "ad" }` items:
+1. `userId` — `${Date.now().toString(36)}-${random}` — persisted in localStorage
+2. `tribeName` — sampled from 30 adjectives × 28 nouns (840 combinations) — persisted; user can rename via the identity chip
+3. `avatarSeed` — `${userId}-${tribeName}` — derived deterministically; changes when name changes
 
-```typescript
-messages.forEach((msg, i) => {
-  items.push({ type: "message", data: msg });
-  if ((i + 1) % 7 === 0 && i < messages.length - 1) {
-    items.push({ type: "ad", key: `ad-${i}` });
-  }
-});
-```
+**Avatar generation** (`src/utils/avatar.ts`): The seed is hashed with DJB2 to a deterministic integer. Hue values and polygon radii are extracted from different bit ranges, producing a unique SVG polygon for every user. Output is a `data:image/svg+xml` base64 URL — no network request.
 
-Every 7th message slot is replaced by a `<TribeAd>` component. The component:
-- Shows a real `<ins class="adsbygoogle">` unit when `VITE_ADSENSE_PUB_ID` is set
-- Shows a dev placeholder otherwise
-- Styled with an orange glow border and a "SIGNAL FROM THE OUTSIDE" monospaced label
+**Username picker**: New joiners (who enter via auto-join or a shared link) see a modal on first entry to choose a display name. Tribe creators set their name at creation time. The identity chip in the header opens the same modal for renaming at any time.
 
-**SPA Ad Refresh:** Since this is a single-page app with no route changes, the standard AdSense `push({})` call fires when a `TribeAd` mounts. Each new ad unit in the DOM gets refreshed automatically. For more advanced ad refresh (e.g. on new tribe join events), call `(window.adsbygoogle = window.adsbygoogle || []).push({})` after mounting.
+---
 
-**AdSense approval:** The `<TribeManifesto>` section renders below the chat on every page load, providing keyword-rich article-style content for Google's content crawler.
+## Campfire Map
+
+`CampfireMap` is a Leaflet map with CartoDB dark-matter tiles, rendered inside a Framer Motion animated panel on the landing screen:
+
+- **Geofence ring** — dashed `Circle` with `radius = GEOFENCE_RADIUS_M` centered on the user
+- **User marker** — custom `divIcon` blue dot
+- **Campfire markers** — 🔥 emoji icons; greyed-out when outside 5 km
+- **Popup** — tribe name, distance, activity status, "Join fire 🔥" button (only enabled within 5 km)
+- **Discovery radius** — only fires within 50 km are shown on the map
+
+`RecenterOnUser` is a sub-component that calls `map.setView()` whenever GPS coordinates update.
 
 ---
 
@@ -175,73 +193,113 @@ Every 7th message slot is replaced by a `<TribeAd>` component. The component:
 
 ```
 App
-├── MockConvexProvider              # message state (mock or real)
-├── AdSenseProvider                 # lazy-loads AdSense script
-├── FireBackground                  # fixed canvas: fire glow + sparks + grain
-└── div.max-w-lg (mobile container)
-    ├── AnimatePresence
-    │   ├── LostSignal              # walk-out overlay (4s, then removed)
-    │   ├── LockedState             # geofence locked: distance counter / permissions
-    │   └── div[data-testid=inner-circle]
+├── AdSenseProvider              # lazy-loads AdSense script
+├── FireBackground               # fixed canvas: fire glow + sparks + grain
+└── AppShell
+    ├── AnimatePresence (mode="wait")
+    │   ├── TribeLanding         ← screen: "landing"
+    │   │   ├── NearbyTribes     # list of campfires within 5 km
+    │   │   ├── CampfireMap      # Leaflet map (toggle)
+    │   │   └── CreateTribeForm  # light a new fire
+    │   │
+    │   ├── [gate screens]       ← screen: "gate"
+    │   │   ├── GeoCheckingScreen
+    │   │   ├── TooFarScreen
+    │   │   ├── KickedOutScreen
+    │   │   └── GeoRequiredScreen
+    │   │
+    │   └── div[data-testid="inner-circle"]  ← screen: "inner"
     │       └── InnerCircle
-    │           ├── TribeHeader     # sticky top: 🔥 + identity chip
-    │           ├── ChatFeed        # scrollable feed
-    │           │   ├── MessageBubble × N   # each message with heat styling
-    │           │   └── TribeAd             # every 7th slot
-    │           └── MessageInput    # sticky bottom: textarea + send
-    └── TribeManifesto              # always visible (SEO content)
+    │           ├── TribeHeader          # sticky top: tribe name + identity chip
+    │           ├── ChatFeed             # scrollable feed
+    │           │   ├── MessageBubble × N  # heat styling + links + image
+    │           │   └── TribeAd            # every 7th slot
+    │           ├── MessageInput         # sticky bottom: textarea + attach + send
+    │           ├── [username picker modal]  # AnimatePresence overlay
+    │           ├── ThreadPanel          # slide-in (AnimatePresence)
+    │           └── [nearby fires sheet] # bottom sheet (AnimatePresence)
+    └── TribeManifesto           # always visible (SEO content)
 ```
 
 ---
 
 ## Animation Design
 
-All animations use **Framer Motion**:
+All animations use Framer Motion:
 
-| Element              | Animation                                           |
-|----------------------|-----------------------------------------------------|
-| FireBackground       | Staggered opacity keyframes on glow layers          |
-| Sparks               | `y` + `opacity` + `scale` to 0 on repeat           |
-| LockedState          | Fade + slide in on mount                            |
-| Distance counter     | `scale` pop on value change                         |
-| LostSignal overlay   | Fade in + scan-line interference                    |
-| MessageBubble        | Spring pop in (`scale: 0.92 → 1`, `y: 20 → 0`)     |
-| MessageInput         | Slide up on mount                                   |
-| TribeHeader          | Slide down on mount                                 |
-| AnimatePresence      | `mode="wait"` ensures exit before enter             |
+| Element | Animation |
+|---|---|
+| FireBackground | Staggered opacity keyframes on glow layers |
+| Landing / gate screens | `AnimatePresence mode="wait"` — exit before enter |
+| CampfireMap | Spring expand: `height: 0 → 340` |
+| MessageBubble | Spring pop-in: `opacity: 0, y: 8 → 0` |
+| ThreadPanel | Slide from right: `x: "100%" → 0` |
+| Username picker modal | Scale + fade: `scale: 0.92 → 1` |
+| Nearby fires sheet | Slide from bottom: `y: "100%" → 0` |
+| Gate screens | Fade + `y: 12 → 0` |
+| KickedOutScreen emoji | Shake: `x: [0, 8, -8, 6, -4, 0]` |
+
+---
+
+## Ad Injection
+
+`ChatFeed` builds a flat `{ type: "message" | "ad" }` array:
+
+```typescript
+messages.forEach((msg, i) => {
+  items.push({ type: "message", data: msg });
+  if ((i + 1) % 7 === 0 && i < messages.length - 1)
+    items.push({ type: "ad", key: `ad-${i}` });
+});
+```
+
+Each `TribeAd` renders a real `<ins class="adsbygoogle">` unit when `VITE_ADSENSE_PUB_ID` is set, or a styled dev placeholder otherwise. The component fires `adsbygoogle.push({})` on mount to trigger an ad fill.
 
 ---
 
 ## CI/CD Pipeline
 
 ```
-Push to branch
+Push to PR branch
     │
     ▼
 ci.yml
-├── lint-and-typecheck (ESLint + tsc --noEmit)
-├── build (vite build)
-└── e2e (Playwright, headless Chromium)
-        │
-        ▼ (main branch only)
+├── lint-and-typecheck
+│   ├── npx convex codegen   (regenerate types)
+│   ├── tsc --noEmit
+│   └── eslint src
+├── build                    (needs: lint-and-typecheck)
+│   ├── npx convex deploy --cmd 'npm run build'
+│   └── upload dist/ artifact
+└── e2e                      (needs: build)
+    ├── npx playwright install chromium (cached)
+    ├── download dist/ artifact
+    └── playwright test --project=chromium
+
+Push to main
+    │
+    ▼
 deploy.yml
-├── npx convex deploy (pushes schema + functions)
-└── vercel --prod (deploys built dist/)
+└── vercel --prod            (uses pre-built artifact)
 ```
 
-GitHub Secrets required for deployment:
-- `VERCEL_TOKEN` — Vercel API token
-- `CONVEX_DEPLOY_KEY` — from Convex dashboard → Settings → Deploy Keys
-- `VITE_CONVEX_URL` — your Convex deployment URL
-- `VITE_TRIBE_LAT` / `VITE_TRIBE_LNG` — event coordinates
-- `VITE_ADSENSE_PUB_ID` — AdSense publisher ID
+**Required GitHub Secrets:**
+
+| Secret | Where to get it |
+|---|---|
+| `CONVEX_DEPLOY_KEY` | Convex dashboard → Settings → Deploy Keys |
+| `CONVEX_DEPLOYMENT` | Convex dashboard → project name |
+| `VITE_CONVEX_URL` | Printed by `npx convex dev` |
+| `VITE_ADSENSE_PUB_ID` | Google AdSense (optional) |
+| `VERCEL_TOKEN` | Vercel dashboard → Account Settings → Tokens |
 
 ---
 
 ## Security Notes
 
-- **No authentication** — by design. The geofence is the only gate.
-- **No PII collected** — userId is random, names are generated, no email/phone.
-- **Client-side geofence** — the 300m check runs in the browser. A determined attacker can spoof location. For higher-trust scenarios, move the location check to a Convex action that validates server-side.
-- **Message content** — no moderation. For production use, add a Convex action that screens `text` before inserting.
-- **AdSense** — only loads when a real publisher ID is configured. No third-party scripts in dev mode.
+- **No authentication** — by design; the geofence is the only gate.
+- **Client-side geofence check** — `haversineDistance` runs in the browser; a motivated attacker can spoof GPS. For higher-trust scenarios, move the distance check into a Convex action that validates coordinates server-side before allowing a join.
+- **No PII collected** — `userId` is random, display names are user-chosen, no email or phone required.
+- **Content moderation** — none implemented; add a Convex action that screens `text` before insertion for production use.
+- **Storage** — uploaded images are accessible to anyone with the signed URL; Convex signs URLs with short TTLs. Deleted messages trigger `ctx.storage.delete(storageId)` so orphaned files don't accumulate.
+- **AdSense** — third-party script only loads when a real publisher ID is configured.

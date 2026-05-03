@@ -1,34 +1,43 @@
 # tribe 🔥
 
-> A hyper-local, ephemeral campfire chat. Only for people within 300 meters.
+> Hyper-local, ephemeral campfire chat. Create a fire anywhere — only people within 5 km can join.
 
-**tribe** is a real-time, geofenced mobile web app built with React, Tailwind CSS, Framer Motion, and Convex. Messages are ephemeral — they glow orange when fresh, fade to ash after 5 minutes, and self-destruct after 30.
+**tribe** is a real-time, geofenced mobile web app. Anyone can light a campfire at their GPS coordinates. Messages glow orange when fresh, fade to ash after 5 minutes, and self-destruct after 30. Walk out of range and you're automatically ejected.
 
 ---
 
 ## Features
 
-- **Geofenced access** — Only users within 300m of the target coordinate enter the Inner Circle
-- **Ephemeral messages** — Auto-deleted after 30 minutes by a Convex cron job
-- **Message heat** — Fresh messages glow orange, older messages fade to charcoal
-- **No sign-up** — The app assigns you a random Tribe Name (e.g. *Neon Wolf*) and a generative SVG avatar
-- **Lost the Signal** — Walk out of the geofence and you're immediately ejected with an animation
-- **AdSense ready** — Every 7th message is a styled "Signal from the Outside" ad unit
-- **Cyber-Primal aesthetic** — Deep forest green (#051a05) + campfire orange (#ff4500), monospaced fonts, fire flicker animations
+| Feature | Details |
+|---|---|
+| **Multiple campfires** | Create a named fire at your current coordinates; others within 5 km can join |
+| **Geofenced access** | `haversineDistance` is checked on every GPS update — entry blocked and auto-kick enforced server-side |
+| **Campfire map** | Leaflet map (CartoDB dark tiles) shows all fires within 50 km; 5 km geofence ring visualised |
+| **Ephemeral messages** | Auto-deleted after 30 min by a Convex cron; tribes expire after 24 h |
+| **Message heat** | Fresh messages glow orange (`hot`), then fade (`warm` → `cold`) |
+| **Threaded replies** | Tap 💬 on any message to open a slide-in thread panel |
+| **Image upload** | Attach images via Convex File Storage (presigned PUT → `storageId` in message) |
+| **Clickable links** | URLs in messages render as tappable `<a>` links |
+| **Relative timestamps** | "just now", "2m", "1h" — updated on every render pass |
+| **Reactions** | 🔥 like any message; count shown inline |
+| **Username picker** | New joiners choose a display name; rename any time via the identity chip |
+| **No sign-up** | Random name + deterministic SVG avatar generated from `userId` seed |
+| **AdSense ready** | Every 7th message slot renders a styled "Signal from the Outside" ad unit |
+| **Cyber-primal aesthetic** | Deep forest green `#051a05` + campfire orange `#ff4500`, monospace fonts |
 
 ---
 
 ## Tech Stack
 
-| Layer      | Technology                    |
-|------------|-------------------------------|
-| Frontend   | React 19 + Vite + TypeScript  |
-| Styling    | Tailwind CSS v3               |
-| Animation  | Framer Motion                 |
-| Backend    | Convex (real-time, serverless)|
-| Deployment | Vercel                        |
-| Tests      | Playwright (E2E)              |
-| CI/CD      | GitHub Actions                |
+| Layer | Technology |
+|---|---|
+| Frontend | React 19 + Vite + TypeScript |
+| Styling | Tailwind CSS v3 + Framer Motion |
+| Map | Leaflet + react-leaflet (CartoDB dark tiles) |
+| Backend | Convex (real-time queries, mutations, file storage, crons) |
+| Deployment | Vercel |
+| Tests | Playwright E2E |
+| CI/CD | GitHub Actions |
 
 ---
 
@@ -54,17 +63,13 @@ Edit `.env.local`:
 # Required: from `npx convex dev` (see step 3)
 VITE_CONVEX_URL=https://your-project.convex.cloud
 
-# Set to your real event coordinates
-VITE_TRIBE_LAT=51.5074
-VITE_TRIBE_LNG=-0.1278
-
 # Optional: your Google AdSense publisher ID
 VITE_ADSENSE_PUB_ID=ca-pub-XXXXXXXXXXXXXXXX
 ```
 
-> **Dev without Convex:** Skip `VITE_CONVEX_URL` and the app runs in mock mode with local in-memory messages. Everything works except cross-device real-time sync.
+> **Dev note:** Without `VITE_CONVEX_URL` the app runs in mock mode — everything works except cross-device real-time sync. `VITE_TRIBE_LAT` / `VITE_TRIBE_LNG` are no longer required; each campfire stores its own coordinates.
 
-### 3. Set up Convex (optional but recommended for real-time)
+### 3. Set up Convex
 
 ```bash
 npx convex dev
@@ -82,13 +87,13 @@ This will:
 npm run dev
 ```
 
-Open `http://localhost:5173`. Since you're likely not at the tribe coordinates, you'll see the "Walking to the Tribe..." locked state. To bypass this in development, use your browser's DevTools geolocation override to spoof coordinates matching `VITE_TRIBE_LAT/LNG`.
+Open `http://localhost:5173`. Grant location permissions when prompted. If you're outside an existing fire's 5 km radius, use **"Light a new fire"** to create one at your location.
+
+> **Dev tip:** Use your browser's DevTools geolocation override to test with spoofed coordinates without physically moving.
 
 ---
 
 ## Running Tests
-
-### E2E tests (Playwright)
 
 ```bash
 # Install browsers (first time only)
@@ -97,17 +102,14 @@ npx playwright install chromium
 # Run all E2E tests
 npm run test:e2e
 
-# Run with interactive UI
+# Interactive UI mode
 npm run test:e2e:ui
-
-# Run a specific test file
-npx playwright test tests/e2e/tribe.spec.ts
 
 # Show the HTML report
 npx playwright show-report
 ```
 
-> Tests automatically mock geolocation — no need to be physically at the coordinates.
+Tests mock geolocation — no need to be at any real coordinates. The suite covers landing state, inner circle, identity, message features, geofence gating, the map toggle, auto-kick on geo departure, ad units, accessibility, and mobile layout.
 
 ---
 
@@ -117,38 +119,39 @@ npx playwright show-report
 
 1. Install Vercel CLI: `npm i -g vercel`
 2. Link project: `vercel link`
-3. Add secrets in Vercel dashboard:
-   - `VITE_CONVEX_URL`
-   - `VITE_TRIBE_LAT` / `VITE_TRIBE_LNG`
-   - `VITE_ADSENSE_PUB_ID`
-4. Deploy with Convex sync:
+3. Add these secrets in Vercel dashboard and GitHub → Settings → Secrets:
+   - `CONVEX_DEPLOY_KEY` — from Convex dashboard → Settings → Deploy Keys
+   - `CONVEX_DEPLOYMENT` — your Convex deployment name
+   - `VITE_CONVEX_URL` — your Convex deployment URL
+   - `VITE_ADSENSE_PUB_ID` — (optional) Google AdSense publisher ID
+4. Push to `main` — GitHub Actions handles Convex deploy + Vercel deploy automatically.
+
+### Manual deploy
 
 ```bash
 npx convex deploy --cmd 'npm run build'
 vercel --prod
 ```
 
-Or push to `main` — the GitHub Actions workflow handles it automatically if you add these GitHub secrets:
-- `VERCEL_TOKEN`
-- `CONVEX_DEPLOY_KEY` (from Convex dashboard → Settings → Deploy Keys)
-
 ### AdSense setup
 
-1. Replace `pub-XXXXXXXXXXXXXXXX` in `public/ads.txt` with your publisher ID
-2. Set `VITE_ADSENSE_PUB_ID` in your environment
-3. Submit the site to AdSense for review
+1. Replace `pub-XXXXXXXXXXXXXXXX` in `public/ads.txt`
+2. Set `VITE_ADSENSE_PUB_ID`
+3. Submit to AdSense for review
 
-> The Tribe Manifesto section at the bottom provides enough article-style text to satisfy the AdSense content policy bot.
+The `TribeManifesto` section provides article-style text to satisfy the content policy crawler.
 
 ---
 
-## Changing the Tribe Location
+## Geofence Radius
 
-Update `VITE_TRIBE_LAT` and `VITE_TRIBE_LNG` to any coordinates. The 300m radius is set in `src/utils/geo.ts`:
+The join radius is 5 km, set in `src/utils/geo.ts`:
 
 ```typescript
-export const GEOFENCE_RADIUS_M = 300; // metres
+export const GEOFENCE_RADIUS_M = 5000; // metres
 ```
+
+The map also shows all campfires within a 50 km discovery radius.
 
 ---
 
@@ -157,43 +160,51 @@ export const GEOFENCE_RADIUS_M = 300; // metres
 ```
 tribe/
 ├── src/
-│   ├── App.tsx                  # Root shell + state machine
+│   ├── App.tsx                    # Root shell + screen state machine
 │   ├── main.tsx
 │   ├── index.css
 │   ├── components/
-│   │   ├── FireBackground.tsx   # Animated campfire background
-│   │   ├── LockedState.tsx      # Out-of-range / permission denied UI
-│   │   ├── LostSignal.tsx       # Walk-out ejection animation
-│   │   ├── TribeHeader.tsx      # Sticky header with identity chip
-│   │   ├── ChatFeed.tsx         # Message list + ad injection
-│   │   ├── MessageBubble.tsx    # Message with heat-based styling
-│   │   ├── MessageInput.tsx     # Textarea + send button
-│   │   ├── Avatar.tsx           # SVG avatar wrapper
-│   │   ├── TribeAd.tsx          # AdSense unit (cyber-primal styled)
-│   │   ├── AdSenseProvider.tsx  # Lazy AdSense script loader
-│   │   └── TribeManifesto.tsx   # SEO content section
+│   │   ├── FireBackground.tsx     # Animated campfire background (canvas)
+│   │   ├── TribeLanding.tsx       # Landing: browse / create fires
+│   │   ├── NearbyTribes.tsx       # Scrollable list of nearby campfires
+│   │   ├── CampfireMap.tsx        # Leaflet map with fire markers + geofence ring
+│   │   ├── CreateTribeForm.tsx    # Light a new fire form
+│   │   ├── TribeHeader.tsx        # Sticky header: tribe name + identity chip
+│   │   ├── ChatFeed.tsx           # Message list + ad injection
+│   │   ├── MessageBubble.tsx      # Message with heat styling + links + image
+│   │   ├── MessageInput.tsx       # Textarea + image attach + send button
+│   │   ├── ThreadPanel.tsx        # Slide-in thread view
+│   │   ├── Avatar.tsx             # SVG avatar wrapper
+│   │   ├── TribeAd.tsx            # AdSense unit (cyber-primal styled)
+│   │   ├── AdSenseProvider.tsx    # Lazy AdSense script loader
+│   │   └── TribeManifesto.tsx     # SEO content section
 │   ├── hooks/
-│   │   ├── useGeolocation.ts    # Geolocation API + Haversine check
-│   │   └── useTribeIdentity.ts  # localStorage identity
+│   │   ├── useGeolocation.ts      # watchPosition + GeoState
+│   │   ├── useActiveTribe.ts      # activeTribeId + confirmedTribeId (localStorage)
+│   │   └── useTribeIdentity.ts    # userId + tribeName + avatarSeed (localStorage)
 │   ├── utils/
-│   │   ├── geo.ts               # Haversine formula + constants
-│   │   ├── tribeNames.ts        # Random name generator
-│   │   └── avatar.ts            # Deterministic SVG avatar
+│   │   ├── geo.ts                 # Haversine formula + GEOFENCE_RADIUS_M
+│   │   ├── tribeNames.ts          # Random name generator
+│   │   └── avatar.ts              # Deterministic DJB2-hashed SVG avatar
 │   └── lib/
-│       └── MockConvexProvider.tsx  # In-memory mock for dev
+│       └── MockConvexProvider.tsx # In-memory mock for dev without Convex
 ├── convex/
-│   ├── schema.ts                # messages table
-│   ├── messages.ts              # list, send, deleteOldMessages
-│   └── crons.ts                 # 5-min purge cron
+│   ├── schema.ts                  # tribes + messages tables
+│   ├── tribes.ts                  # list, create, deleteOldTribes
+│   ├── messages.ts                # list, listThread, send, toggleLike,
+│   │                              # generateUploadUrl, deleteOldMessages
+│   └── crons.ts                   # purge messages (5 min), purge tribes (1 hr)
+├── docs/
+│   └── diagrams/                  # PlantUML sources + generated PNGs
 ├── tests/
 │   └── e2e/
-│       └── tribe.spec.ts        # Playwright E2E tests
+│       └── tribe.spec.ts          # Playwright E2E tests
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml               # Lint + build + E2E on PR
-│       └── deploy.yml           # Deploy to Vercel on main push
+│       ├── ci.yml                 # Lint + type-check + build + E2E on PR
+│       └── deploy.yml             # Deploy to Vercel on main push
 ├── public/
-│   └── ads.txt                  # AdSense publisher declaration
+│   └── ads.txt
 ├── playwright.config.ts
 ├── tailwind.config.js
 ├── vercel.json
@@ -204,17 +215,23 @@ tribe/
 
 ## Scripts
 
-| Command                | Description                          |
-|------------------------|--------------------------------------|
-| `npm run dev`          | Start dev server at localhost:5173   |
-| `npm run build`        | Type-check + production build        |
-| `npm run preview`      | Preview production build locally     |
-| `npm run lint`         | Run ESLint                           |
-| `npm run type-check`   | TypeScript check without building    |
-| `npm run test:e2e`     | Run Playwright E2E tests             |
-| `npm run test:e2e:ui`  | Playwright interactive UI mode       |
-| `npm run convex:dev`   | Start Convex dev server              |
-| `npm run convex:deploy`| Deploy Convex functions              |
+| Command | Description |
+|---|---|
+| `npm run dev` | Start dev server at localhost:5173 |
+| `npm run build` | Type-check + production build |
+| `npm run preview` | Preview production build locally |
+| `npm run lint` | Run ESLint |
+| `npm run type-check` | TypeScript check without building |
+| `npm run test:e2e` | Run Playwright E2E tests |
+| `npm run test:e2e:ui` | Playwright interactive UI mode |
+| `npm run convex:dev` | Start Convex dev server |
+| `npm run convex:deploy` | Deploy Convex functions |
+
+---
+
+## Architecture
+
+See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for a full breakdown of data flow, geofence logic, message lifecycle, component tree, and CI/CD pipeline — with PlantUML diagrams.
 
 ---
 

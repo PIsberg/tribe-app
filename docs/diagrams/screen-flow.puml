@@ -1,0 +1,28 @@
+@startuml screen-flow
+!theme plain
+hide empty description
+skinparam defaultFontName monospace
+
+state "Landing" as L : TribeLanding\n(browse / create tribes)
+state "Checking" as GC : GeoCheckingScreen\n(spinner)
+state "Too Far" as TF : TooFarScreen\n(back button)
+state "Kicked Out" as KO : KickedOutScreen\n(auto-dismiss 4 s)
+state "Geo Required" as GD : GeoRequiredScreen\n(location denied)
+state "Inner Circle" as I : InnerCircle\n(chat, threads, map)
+
+[*]  --> L  : app load
+
+L   --> GC  : tribe selected\n(join / shared link / auto-join)
+GC  --> I   : dist ≤ 5 km
+GC  --> TF  : dist > 5 km, first visit
+GC  --> KO  : dist > 5 km, was confirmed inside
+GC  --> GD  : permission denied
+
+I   --> KO  : drifts outside 5 km\n(geoGate useMemo fires)
+I   --> L   : manual leave
+
+TF  --> L   : back button
+KO  --> L   : dismiss / auto 4 s
+GD  --> L   : back button
+
+@enduml

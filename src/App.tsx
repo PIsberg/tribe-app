@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useState } from "react";
+import { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
@@ -12,10 +12,11 @@ import { TribeManifesto } from "./components/TribeManifesto";
 import { AdSenseProvider } from "./components/AdSenseProvider";
 import { ThreadPanel } from "./components/ThreadPanel";
 import { NearbyTribes } from "./components/NearbyTribes";
+import { CreateTribeForm } from "./components/CreateTribeForm";
 import { useGeolocation } from "./hooks/useGeolocation";
-import { useTribeIdentity } from "./hooks/useTribeIdentity";
 import { useActiveTribe } from "./hooks/useActiveTribe";
-import { haversineDistance } from "./utils/geo";
+import { useTribeIdentity } from "./hooks/useTribeIdentity";
+import { haversineDistance, formatDistance, GEOFENCE_RADIUS_M } from "./utils/geo";
 import type { Message } from "./components/MessageBubble";
 import type { GeoState } from "./hooks/useGeolocation";
 
@@ -40,6 +41,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
 
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [showNearby, setShowNearby] = useState(false);
+  const [showNamePicker, setShowNamePicker] = useState(!identity.nameChosen);
 
   const messages = (rawMessages ?? []) as unknown as Message[];
   const openThreadMessage = openThreadId
@@ -54,13 +56,14 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
       .filter((t) => haversineDistance(geo.coords!.lat, geo.coords!.lng, t.lat, t.lng) <= 50_000);
   }, [allTribes, tribeId, geo.coords]);
 
-  const send = (text: string) =>
+  const send = (text: string, storageId?: Id<"_storage">) =>
     sendMutation({
       tribeId,
       text,
       author: identity.tribeName,
       authorId: identity.userId,
       avatarSeed: identity.avatarSeed,
+      ...(storageId ? { storageId } : {}),
     });
 
   const handleLike = (messageId: string) =>
@@ -83,6 +86,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
         onLeave={onLeave}
         nearbyCount={nearbyOthers.length}
         onShowNearby={nearbyOthers.length > 0 ? () => setShowNearby(true) : undefined}
+        onEditName={() => setShowNamePicker(true)}
       />
       <ChatFeed
         messages={messages}
@@ -91,6 +95,41 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
         onThreadReply={(id) => setOpenThreadId(id)}
       />
       <MessageInput onSend={send} tribeName={identity.tribeName} />
+
+      {/* Username picker — shown for new users who haven't chosen a name yet */}
+      <AnimatePresence>
+        {showNamePicker && (
+          <motion.div
+            className="absolute inset-0 z-50 flex items-center justify-center px-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+            <motion.div
+              className="relative z-10 w-full max-w-sm bg-[#050f05] border border-fire-ember/30 rounded-2xl px-5 py-5"
+              initial={{ scale: 0.92, y: 16 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.92, y: 16 }}
+              transition={{ type: "spring", stiffness: 300, damping: 28 }}
+            >
+              <p className="font-mono text-xs text-fire-char/50 mb-3 text-center uppercase tracking-widest">
+                Choose your name for{" "}
+                <span className="text-fire-glow font-bold">{tribe.name}</span>
+              </p>
+              <CreateTribeForm
+                onSubmit={(_tribeName, userName) => {
+                  identity.setTribeName(userName);
+                  setShowNamePicker(false);
+                }}
+                onCancel={() => setShowNamePicker(false)}
+                defaultUserName={identity.tribeName}
+                nameOnly
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Thread panel */}
       <AnimatePresence>
@@ -152,19 +191,149 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
   );
 }
 
+// ─── Geofence gate screens ────────────────────────────────────────────────────
+
+function GeoCheckingScreen() {
+  return (
+    <motion.div
+      className="flex-1 flex flex-col items-center justify-center gap-4 px-6"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <motion.div
+        className="text-4xl"
+        animate={{ scale: [1, 1.1, 1] }}
+        transition={{ duration: 1.5, repeat: Infinity }}
+      >
+        📍
+      </motion.div>
+      <p className="font-mono text-sm text-fire-char/60 uppercase tracking-widest animate-pulse">
+        Locating you...
+      </p>
+    </motion.div>
+  );
+}
+
+function TooFarScreen({ tribeName, dist, onBack }: { tribeName: string; dist: number; onBack: () => void }) {
+  return (
+    <motion.div
+      className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+    >
+      <div className="text-5xl">🚫🔥</div>
+      <h2 className="font-mono text-lg font-bold text-white">Too far from the fire</h2>
+      <p className="font-mono text-sm text-fire-char/60">
+        <span className="text-fire-glow font-bold">{tribeName}</span> is{" "}
+        <span className="text-fire-ember">{formatDistance(dist)}</span> away.
+      </p>
+      <p className="font-mono text-xs text-fire-char/40">
+        You need to be within {formatDistance(GEOFENCE_RADIUS_M)} to join this campfire.
+      </p>
+      <motion.button
+        onClick={onBack}
+        whileTap={{ scale: 0.96 }}
+        className="mt-2 px-6 py-3 rounded-xl border border-fire-char/30 font-mono text-sm text-fire-char/60 hover:border-fire-ember/40 hover:text-white transition-all"
+      >
+        ← Back
+      </motion.button>
+    </motion.div>
+  );
+}
+
+function KickedOutScreen({ tribeName, onDismiss }: { tribeName: string; onDismiss: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 4000);
+    return () => clearTimeout(t);
+  }, [onDismiss]);
+
+  return (
+    <motion.div
+      data-testid="kicked-out-screen"
+      className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+    >
+      <motion.div
+        className="text-5xl"
+        animate={{ x: [0, 8, -8, 6, -4, 0] }}
+        transition={{ duration: 0.6, delay: 0.2 }}
+      >
+        🚶🔥
+      </motion.div>
+      <h2 className="font-mono text-lg font-bold text-white">You've left the fire</h2>
+      <p className="font-mono text-sm text-fire-char/60">
+        You wandered too far from{" "}
+        <span className="text-fire-glow font-bold">{tribeName}</span>.
+      </p>
+      <motion.button
+        onClick={onDismiss}
+        whileTap={{ scale: 0.96 }}
+        className="mt-2 px-6 py-3 rounded-xl border border-fire-char/30 font-mono text-sm text-fire-char/60 hover:border-fire-ember/40 hover:text-white transition-all"
+      >
+        ← Back to landing
+      </motion.button>
+    </motion.div>
+  );
+}
+
+function GeoRequiredScreen({ tribeName, onBack }: { tribeName: string; onBack: () => void }) {
+  return (
+    <motion.div
+      className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+    >
+      <div className="text-5xl">📍</div>
+      <h2 className="font-mono text-lg font-bold text-white">Location required</h2>
+      <p className="font-mono text-sm text-fire-char/60">
+        To join <span className="text-fire-glow font-bold">{tribeName}</span>, we need to verify
+        you're nearby. Please enable location in your browser and try again.
+      </p>
+      <motion.button
+        onClick={onBack}
+        whileTap={{ scale: 0.96 }}
+        className="mt-2 px-6 py-3 rounded-xl border border-fire-char/30 font-mono text-sm text-fire-char/60 hover:border-fire-ember/40 hover:text-white transition-all"
+      >
+        ← Back
+      </motion.button>
+    </motion.div>
+  );
+}
+
 // ─── App shell ───────────────────────────────────────────────────────────────
 
+type GeoGate =
+  | { status: "ok" }
+  | { status: "checking" }
+  | { status: "blocked"; tribeName: string; dist: number }
+  | { status: "denied"; tribeName: string };
+
 function AppShell() {
-  const { activeTribeId, setActiveTribeId } = useActiveTribe();
+  const { activeTribeId, setActiveTribeId, confirmedTribeId, setConfirmedTribeId } = useActiveTribe();
   const tribesRaw = useQuery(api.tribes.list);
   const tribes = useMemo(() => tribesRaw ?? [], [tribesRaw]);
-  const identity = useTribeIdentity();
   const autoJoinedRef = useRef(false);
   const geo = useGeolocation();
 
   const activeTribe = activeTribeId
     ? tribes.find((t) => (t._id as string) === activeTribeId) ?? null
     : null;
+
+  // Derives gate status purely from current coords — no effect or extra state needed.
+  // Re-evaluates on every watchPosition update, providing continuous monitoring for kicks too.
+  const geoGate = useMemo<GeoGate>(() => {
+    if (!activeTribeId || !activeTribe) return { status: "ok" };
+    if (geo.status === "denied" || geo.status === "unsupported" || geo.status === "error") return { status: "denied", tribeName: activeTribe.name };
+    if (geo.status !== "granted" || !geo.coords) return { status: "checking" };
+    const dist = haversineDistance(geo.coords.lat, geo.coords.lng, activeTribe.lat, activeTribe.lng);
+    if (dist > GEOFENCE_RADIUS_M) return { status: "blocked", tribeName: activeTribe.name, dist };
+    return { status: "ok" };
+  }, [activeTribeId, activeTribe, geo.status, geo.coords]);
 
   // Clear active tribe from state if it expired/disappeared
   useEffect(() => {
@@ -203,16 +372,37 @@ function AppShell() {
       .sort((a, b) => (b.lastMessageAt ?? b.createdAt) - (a.lastMessageAt ?? a.createdAt));
     if (nearby.length === 0) return;
     autoJoinedRef.current = true;
-    identity.setTribeName(identity.tribeName);
-    setActiveTribeId(nearby[0]._id as string);
-  }, [geo.status, geo.coords, activeTribeId, tribes, identity, setActiveTribeId]);
+    const tribeId = nearby[0]._id as string;
+    setActiveTribeId(tribeId);
+    setConfirmedTribeId(tribeId);
+  }, [geo.status, geo.coords, activeTribeId, tribes, setActiveTribeId, setConfirmedTribeId]);
 
-  const handleJoin = (tribe: Tribe) => setActiveTribeId(tribe._id as string);
-  const handleCreate = (tribeId: string) => setActiveTribeId(tribeId);
-  const handleLeave = () => setActiveTribeId(null);
-  const handleJoinOther = (tribe: Tribe) => setActiveTribeId(tribe._id as string);
+  const handleJoin = (tribe: Tribe) => {
+    const id = tribe._id as string;
+    setActiveTribeId(id);
+    setConfirmedTribeId(id);
+  };
+  const handleCreate = (tribeId: string) => {
+    setActiveTribeId(tribeId);
+    setConfirmedTribeId(tribeId);
+  };
+  const handleLeave = useCallback(() => {
+    setActiveTribeId(null);
+    setConfirmedTribeId(null);
+  }, [setActiveTribeId, setConfirmedTribeId]);
+  const handleJoinOther = (tribe: Tribe) => {
+    const id = tribe._id as string;
+    setActiveTribeId(id);
+    setConfirmedTribeId(id);
+  };
 
-  const screen = !activeTribe ? "landing" : "inner";
+  // True when the user was confirmed inside this tribe but has now drifted out.
+  const hasDrifted =
+    confirmedTribeId !== null &&
+    confirmedTribeId === activeTribeId &&
+    geoGate.status === "blocked";
+
+  const screen = !activeTribe ? "landing" : geoGate.status === "ok" ? "inner" : "gate";
 
   return (
     <div className="relative flex flex-col min-h-[100dvh] max-w-lg mx-auto w-full">
@@ -225,6 +415,25 @@ function AppShell() {
             onJoin={handleJoin}
             onCreate={handleCreate}
           />
+        ) : screen === "gate" ? (
+          <motion.div
+            key="gate"
+            className="relative flex flex-col flex-1 min-h-[100dvh]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            {geoGate.status === "checking" && <GeoCheckingScreen />}
+            {geoGate.status === "blocked" && hasDrifted && (
+              <KickedOutScreen tribeName={geoGate.tribeName} onDismiss={handleLeave} />
+            )}
+            {geoGate.status === "blocked" && !hasDrifted && (
+              <TooFarScreen tribeName={geoGate.tribeName} dist={geoGate.dist} onBack={handleLeave} />
+            )}
+            {geoGate.status === "denied" && (
+              <GeoRequiredScreen tribeName={geoGate.tribeName} onBack={handleLeave} />
+            )}
+          </motion.div>
         ) : (
           <div
             key="inner"

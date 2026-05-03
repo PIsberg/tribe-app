@@ -7,13 +7,19 @@ export const list = query({
   args: { tribeId: v.id("tribes") },
   handler: async (ctx, args) => {
     const cutoff = Date.now() - THIRTY_MINUTES;
-    return ctx.db
+    const messages = await ctx.db
       .query("messages")
       .withIndex("by_tribeId_and_timestamp", (q) =>
         q.eq("tribeId", args.tribeId).gt("timestamp", cutoff)
       )
       .order("asc")
       .take(200);
+    return Promise.all(
+      messages.map(async (m) => ({
+        ...m,
+        imageUrl: m.storageId ? await ctx.storage.getUrl(m.storageId) : null,
+      }))
+    );
   },
 });
 
@@ -21,13 +27,26 @@ export const listThread = query({
   args: { parentId: v.id("messages") },
   handler: async (ctx, args) => {
     const cutoff = Date.now() - THIRTY_MINUTES;
-    return ctx.db
+    const messages = await ctx.db
       .query("messages")
       .withIndex("by_parentId_and_timestamp", (q) =>
         q.eq("parentId", args.parentId).gt("timestamp", cutoff)
       )
       .order("asc")
       .take(50);
+    return Promise.all(
+      messages.map(async (m) => ({
+        ...m,
+        imageUrl: m.storageId ? await ctx.storage.getUrl(m.storageId) : null,
+      }))
+    );
+  },
+});
+
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    return ctx.storage.generateUploadUrl();
   },
 });
 
@@ -39,14 +58,16 @@ export const send = mutation({
     authorId: v.string(),
     avatarSeed: v.string(),
     parentId: v.optional(v.id("messages")),
+    storageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
-    const { parentId, ...rest } = args;
+    const { parentId, storageId, ...rest } = args;
     const id = await ctx.db.insert("messages", {
       ...rest,
       timestamp: Date.now(),
       likes: [],
       ...(parentId ? { parentId } : {}),
+      ...(storageId ? { storageId } : {}),
     });
     if (parentId) {
       const parent = await ctx.db.get(parentId);
@@ -84,7 +105,12 @@ export const deleteOldMessages = internalMutation({
       .query("messages")
       .withIndex("by_timestamp", (q) => q.lt("timestamp", cutoff))
       .take(100);
-    await Promise.all(old.map((m) => ctx.db.delete(m._id)));
+    await Promise.all(
+      old.map(async (m) => {
+        if (m.storageId) await ctx.storage.delete(m.storageId);
+        await ctx.db.delete(m._id);
+      })
+    );
     return old.length;
   },
 });

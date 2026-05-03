@@ -10,6 +10,7 @@ function getInitialTribeId(): string | null {
 
 export function useActiveTribe() {
   const [activeTribeId, setActiveTribeIdState] = useState<string | null>(getInitialTribeId);
+  const [confirmedTribeId, setConfirmedTribeIdState] = useState<string | null>(null);
 
   const setActiveTribeId = useCallback((id: string | null) => {
     if (id) {
@@ -20,5 +21,9 @@ export function useActiveTribe() {
     setActiveTribeIdState(id);
   }, []);
 
-  return { activeTribeId, setActiveTribeId };
+  const setConfirmedTribeId = useCallback((id: string | null) => {
+    setConfirmedTribeIdState(id);
+  }, []);
+
+  return { activeTribeId, setActiveTribeId, confirmedTribeId, setConfirmedTribeId };
 }

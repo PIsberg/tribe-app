@@ -7,6 +7,15 @@ import { MessageBubble, type Message } from "./MessageBubble";
 import { Avatar } from "./Avatar";
 import { avatarDataUrl } from "../utils/avatar";
 
+function formatAge(ts: number): string {
+  const secs = Math.floor((Date.now() - ts) / 1000);
+  if (secs < 30) return "just now";
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins / 60)}h`;
+}
+
 interface Props {
   parentMessage: Message;
   tribeId: Id<"tribes">;
@@ -33,10 +42,6 @@ export function ThreadPanel({
   const [value, setValue] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const parentAvatarUrl = avatarDataUrl(parentMessage.avatarSeed);
-  const timeStr = new Date(parentMessage.timestamp).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -103,10 +108,17 @@ export function ThreadPanel({
             <span className="font-mono text-[10px] font-bold text-fire-glow mr-1.5">
               {parentMessage.author}
             </span>
-            <span className="font-mono text-[9px] text-fire-char/40">{timeStr}</span>
+            <span className="font-mono text-[9px] text-fire-char/40">{formatAge(parentMessage.timestamp)}</span>
             <div className="text-[13px] text-white/85 mt-0.5 leading-snug break-words">
               {parentMessage.text}
             </div>
+            {parentMessage.imageUrl && (
+              <img
+                src={parentMessage.imageUrl}
+                alt="shared image"
+                className="mt-1.5 max-w-[200px] max-h-[160px] rounded-lg object-cover border border-fire-char/20 opacity-85"
+              />
+            )}
           </div>
         </div>
       </div>
