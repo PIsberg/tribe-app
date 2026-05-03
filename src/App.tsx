@@ -243,6 +243,43 @@ function TooFarScreen({ tribeName, dist, onBack }: { tribeName: string; dist: nu
   );
 }
 
+function KickedOutScreen({ tribeName, onDismiss }: { tribeName: string; onDismiss: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 4000);
+    return () => clearTimeout(t);
+  }, [onDismiss]);
+
+  return (
+    <motion.div
+      data-testid="kicked-out-screen"
+      className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+    >
+      <motion.div
+        className="text-5xl"
+        animate={{ x: [0, 8, -8, 6, -4, 0] }}
+        transition={{ duration: 0.6, delay: 0.2 }}
+      >
+        🚶🔥
+      </motion.div>
+      <h2 className="font-mono text-lg font-bold text-white">You've left the fire</h2>
+      <p className="font-mono text-sm text-fire-char/60">
+        You wandered too far from{" "}
+        <span className="text-fire-glow font-bold">{tribeName}</span>.
+      </p>
+      <motion.button
+        onClick={onDismiss}
+        whileTap={{ scale: 0.96 }}
+        className="mt-2 px-6 py-3 rounded-xl border border-fire-char/30 font-mono text-sm text-fire-char/60 hover:border-fire-ember/40 hover:text-white transition-all"
+      >
+        ← Back to landing
+      </motion.button>
+    </motion.div>
+  );
+}
+
 function GeoRequiredScreen({ tribeName, onBack }: { tribeName: string; onBack: () => void }) {
   return (
     <motion.div
@@ -285,6 +322,7 @@ function AppShell() {
   const checkedTribeRef = useRef<string | null>(null);
   const geo = useGeolocation();
   const [geoGate, setGeoGate] = useState<GeoGate>({ status: "ok" });
+  const [kickedFrom, setKickedFrom] = useState<string | null>(null);
 
   const activeTribe = activeTribeId
     ? tribes.find((t) => (t._id as string) === activeTribeId) ?? null
@@ -358,6 +396,21 @@ function AppShell() {
     setActiveTribeId(nearby[0]._id as string);
   }, [geo.status, geo.coords, activeTribeId, tribes, identity, setActiveTribeId]);
 
+  // Kick user out when they leave the geofence while inside InnerCircle.
+  // The gate entry check already stamped checkedTribeRef so it skips re-entry;
+  // this effect handles every subsequent position update.
+  useEffect(() => {
+    if (geoGate.status !== "ok" || !activeTribe || geo.status !== "granted" || !geo.coords) return;
+    const dist = haversineDistance(geo.coords.lat, geo.coords.lng, activeTribe.lat, activeTribe.lng);
+    if (dist > GEOFENCE_RADIUS_M) {
+      const name = activeTribe.name;
+      checkedTribeRef.current = null;
+      setGeoGate({ status: "ok" });
+      setActiveTribeId(null);
+      setKickedFrom(name);
+    }
+  }, [geo.coords, geo.status, geoGate.status, activeTribe, setActiveTribeId]);
+
   const handleJoin = (tribe: Tribe) => setActiveTribeId(tribe._id as string);
   const handleCreate = (tribeId: string) => setActiveTribeId(tribeId);
   const handleLeave = () => {
@@ -372,7 +425,17 @@ function AppShell() {
   return (
     <div className="relative flex flex-col min-h-[100dvh] max-w-lg mx-auto w-full">
       <AnimatePresence mode="wait">
-        {screen === "landing" ? (
+        {kickedFrom ? (
+          <motion.div
+            key="kicked"
+            className="relative flex flex-col flex-1 min-h-[100dvh]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <KickedOutScreen tribeName={kickedFrom} onDismiss={() => setKickedFrom(null)} />
+          </motion.div>
+        ) : screen === "landing" ? (
           <TribeLanding
             key="landing"
             geo={geo}

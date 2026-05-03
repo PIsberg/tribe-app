@@ -375,6 +375,54 @@ test.describe("tribe — map", () => {
   });
 });
 
+// ─── Auto-kick on geo departure ───────────────────────────────────────────────
+
+test.describe("tribe — auto-kick on geo departure", () => {
+  test("shows kicked-out screen when user leaves the geofence", async ({ page }) => {
+    await enterInnerCircle(page);
+
+    // Simulate user walking far away (Paris, ~340 km from London tribe center)
+    await page.context().setGeolocation({ latitude: 48.8566, longitude: 2.3522 });
+
+    await expect(page.locator("[data-testid='kicked-out-screen']")).toBeVisible({ timeout: 15000 });
+    await expect(page.locator("text=You've left the fire")).toBeVisible();
+  });
+
+  test("kicked-out screen names the campfire the user left", async ({ page }) => {
+    await enterInnerCircle(page);
+
+    // Read the active tribe name from the header before moving
+    const tribeName = await page.locator("header .font-mono.text-sm.font-bold").first().textContent();
+
+    await page.context().setGeolocation({ latitude: 48.8566, longitude: 2.3522 });
+
+    await expect(page.locator("[data-testid='kicked-out-screen']")).toBeVisible({ timeout: 15000 });
+    if (tribeName) {
+      await expect(page.locator("[data-testid='kicked-out-screen']")).toContainText(tribeName);
+    }
+  });
+
+  test("dismissing kicked-out screen returns to landing", async ({ page }) => {
+    await enterInnerCircle(page);
+
+    await page.context().setGeolocation({ latitude: 48.8566, longitude: 2.3522 });
+    await expect(page.locator("[data-testid='kicked-out-screen']")).toBeVisible({ timeout: 15000 });
+
+    await page.getByRole("button", { name: /back to landing/i }).click();
+    await expect(page.locator("[data-testid='tribe-landing']")).toBeVisible({ timeout: 5000 });
+  });
+
+  test("kicked-out screen auto-dismisses to landing after timeout", async ({ page }) => {
+    await enterInnerCircle(page);
+
+    await page.context().setGeolocation({ latitude: 48.8566, longitude: 2.3522 });
+    await expect(page.locator("[data-testid='kicked-out-screen']")).toBeVisible({ timeout: 15000 });
+
+    // Screen auto-dismisses after 4 s
+    await expect(page.locator("[data-testid='tribe-landing']")).toBeVisible({ timeout: 8000 });
+  });
+});
+
 // ─── Ad units ────────────────────────────────────────────────────────────────
 
 test.describe("tribe — ad units", () => {
