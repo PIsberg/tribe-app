@@ -143,9 +143,9 @@ test.describe("tribe — inner circle", () => {
     }
 
     const bubbles = page.locator("[data-testid='message-bubble']");
-    await expect(bubbles.filter({ hasText: "First" })).toBeVisible({ timeout: 10000 });
-    await expect(bubbles.filter({ hasText: "Second" })).toBeVisible({ timeout: 10000 });
-    await expect(bubbles.filter({ hasText: "Third" })).toBeVisible({ timeout: 10000 });
+    await expect(bubbles.filter({ hasText: "First" }).last()).toBeVisible({ timeout: 10000 });
+    await expect(bubbles.filter({ hasText: "Second" }).last()).toBeVisible({ timeout: 10000 });
+    await expect(bubbles.filter({ hasText: "Third" }).last()).toBeVisible({ timeout: 10000 });
   });
 
   test("tribe name is shown in the header", async ({ page }) => {
@@ -449,7 +449,7 @@ test.describe("tribe — ad units", () => {
       await input.press("Enter");
       await page.waitForTimeout(80);
     }
-    await expect(page.locator("text=Signal from the Outside")).toBeVisible({ timeout: 15000 });
+    await expect(page.locator("text=Signal from the Outside").first()).toBeVisible({ timeout: 15000 });
   });
 });
 
