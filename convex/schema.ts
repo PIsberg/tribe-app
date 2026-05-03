@@ -21,6 +21,7 @@ export default defineSchema({
     likes: v.array(v.string()),
     parentId: v.optional(v.id("messages")),
     replyCount: v.optional(v.number()),
+    storageId: v.optional(v.id("_storage")),
   })
     .index("by_tribeId_and_timestamp", ["tribeId", "timestamp"])
     .index("by_timestamp", ["timestamp"])

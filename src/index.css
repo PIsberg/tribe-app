@@ -48,6 +48,17 @@
   }
 }
 
+/* Strip default Leaflet popup chrome so our custom inner div shows cleanly */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.leaflet-popup-content {
+  margin: 0 !important;
+}
+
 @keyframes flicker {
   0%, 100% { opacity: 0.9; }
   15%       { opacity: 0.72; }

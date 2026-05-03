@@ -56,9 +56,11 @@ export function ChatFeed({ messages, currentUserId, onLike, onThreadReply }: Pro
 
   return (
     <div
-      className="flex-1 overflow-y-auto px-1 py-2 space-y-0.5 overscroll-contain"
+      className="flex-1 flex flex-col overflow-y-auto px-1 py-2 overscroll-contain"
       data-testid="chat-feed"
     >
+      <div className="flex-1" />
+      <div className="space-y-0.5">
       <AnimatePresence initial={false}>
         {items.map((item) =>
           item.type === "ad" ? (
@@ -82,6 +84,7 @@ export function ChatFeed({ messages, currentUserId, onLike, onThreadReply }: Pro
           )
         )}
       </AnimatePresence>
+      </div>
       <div ref={bottomRef} />
     </div>
   );

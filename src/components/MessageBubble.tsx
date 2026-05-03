@@ -12,6 +12,7 @@ export type Message = {
   likes: string[];
   parentId?: string;
   replyCount?: number;
+  imageUrl?: string | null;
 };
 
 interface Props {
@@ -29,13 +30,55 @@ function getHeat(timestamp: number): "hot" | "warm" | "cold" {
   return "cold";
 }
 
+function formatAge(timestamp: number): string {
+  const secs = Math.floor((Date.now() - timestamp) / 1000);
+  if (secs < 30) return "just now";
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins / 60)}h`;
+}
+
+const URL_REGEX = /https?:\/\/[^\s<>"]+[^\s<>".,;:!?)\]]/g;
+
+function MessageText({ text, textColor }: { text: string; textColor: string }) {
+  const parts: Array<{ type: "text" | "link"; value: string }> = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  URL_REGEX.lastIndex = 0;
+  while ((match = URL_REGEX.exec(text)) !== null) {
+    if (match.index > last) parts.push({ type: "text", value: text.slice(last, match.index) });
+    parts.push({ type: "link", value: match[0] });
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) parts.push({ type: "text", value: text.slice(last) });
+
+  return (
+    <span className={`text-[13px] ${textColor} break-words`}>
+      {parts.map((p, i) =>
+        p.type === "link" ? (
+          <a
+            key={i}
+            href={p.value}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline text-fire-glow/80 hover:text-fire-glow transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {p.value}
+          </a>
+        ) : (
+          <span key={i}>{p.value}</span>
+        )
+      )}
+    </span>
+  );
+}
+
 export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply }: Props) {
   const heat = getHeat(message.timestamp);
   const avatarUrl = avatarDataUrl(message.avatarSeed);
-  const timeStr = new Date(message.timestamp).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const ageStr = formatAge(message.timestamp);
 
   const nameColor =
     heat === "hot" ? "text-fire-ember" : heat === "warm" ? "text-fire-glow/70" : "text-fire-char/45";
@@ -62,7 +105,7 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
         <span className={`font-mono text-[10px] font-bold mr-1.5 ${nameColor}`}>
           {message.author}
         </span>
-        <span className="font-mono text-[9px] text-fire-char/35 mr-1.5">{timeStr}</span>
+        <span className="font-mono text-[9px] text-fire-char/35 mr-1.5">{ageStr}</span>
         {heat === "hot" && (
           <motion.span
             className="text-[9px] mr-1"
@@ -72,7 +115,16 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
             🔥
           </motion.span>
         )}
-        <span className={`text-[13px] ${textColor} break-words`}>{message.text}</span>
+        {message.text && <MessageText text={message.text} textColor={textColor} />}
+        {message.imageUrl && (
+          <div className="mt-1.5">
+            <img
+              src={message.imageUrl}
+              alt="shared image"
+              className={`max-w-[220px] max-h-[200px] rounded-lg object-cover border border-fire-char/20 ${heat === "cold" ? "opacity-35" : "opacity-85"}`}
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-1 flex-shrink-0">
