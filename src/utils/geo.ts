@@ -3,7 +3,7 @@ export const TRIBE_CENTER = {
   lng: parseFloat(import.meta.env.VITE_TRIBE_LNG ?? "-0.1278"),
 };
 
-export const GEOFENCE_RADIUS_M = 300;
+export const GEOFENCE_RADIUS_M = 5000;
 
 export function haversineDistance(
   lat1: number,

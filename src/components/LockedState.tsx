@@ -76,7 +76,7 @@ export function LockedState({ geo }: Props) {
             </motion.div>
             <p className="text-fire-char text-sm">
               The inner circle is within{" "}
-              <span className="text-fire-glow font-mono">300m</span>. Keep moving.
+              <span className="text-fire-glow font-mono">5km</span>. Keep moving.
             </p>
 
             {/* Distance bar */}
@@ -85,7 +85,7 @@ export function LockedState({ geo }: Props) {
                 className="h-full bg-gradient-to-r from-fire-ember to-fire-glow rounded-full"
                 animate={{
                   width: geo.distance != null
-                    ? `${Math.max(0, Math.min(100, 100 - (geo.distance / 1000) * 100))}%`
+                    ? `${Math.max(0, Math.min(100, 100 - (geo.distance / 5000) * 100))}%`
                     : "0%",
                 }}
                 transition={{ duration: 0.5 }}

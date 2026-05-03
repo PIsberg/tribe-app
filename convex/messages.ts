@@ -17,6 +17,20 @@ export const list = query({
   },
 });
 
+export const listThread = query({
+  args: { parentId: v.id("messages") },
+  handler: async (ctx, args) => {
+    const cutoff = Date.now() - THIRTY_MINUTES;
+    return ctx.db
+      .query("messages")
+      .withIndex("by_parentId_and_timestamp", (q) =>
+        q.eq("parentId", args.parentId).gt("timestamp", cutoff)
+      )
+      .order("asc")
+      .take(50);
+  },
+});
+
 export const send = mutation({
   args: {
     tribeId: v.id("tribes"),
@@ -24,13 +38,22 @@ export const send = mutation({
     author: v.string(),
     authorId: v.string(),
     avatarSeed: v.string(),
+    parentId: v.optional(v.id("messages")),
   },
   handler: async (ctx, args) => {
+    const { parentId, ...rest } = args;
     const id = await ctx.db.insert("messages", {
-      ...args,
+      ...rest,
       timestamp: Date.now(),
       likes: [],
+      ...(parentId ? { parentId } : {}),
     });
+    if (parentId) {
+      const parent = await ctx.db.get(parentId);
+      if (parent) {
+        await ctx.db.patch(parentId, { replyCount: (parent.replyCount ?? 0) + 1 });
+      }
+    }
     await ctx.db.patch(args.tribeId, { lastMessageAt: Date.now() });
     return id;
   },

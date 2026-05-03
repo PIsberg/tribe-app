@@ -1,5 +1,5 @@
-import { useEffect, useRef, useMemo } from "react";
-import { AnimatePresence } from "framer-motion";
+import { useEffect, useRef, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import type { Doc, Id } from "../convex/_generated/dataModel";
@@ -10,11 +10,14 @@ import { ChatFeed } from "./components/ChatFeed";
 import { MessageInput } from "./components/MessageInput";
 import { TribeManifesto } from "./components/TribeManifesto";
 import { AdSenseProvider } from "./components/AdSenseProvider";
+import { ThreadPanel } from "./components/ThreadPanel";
+import { NearbyTribes } from "./components/NearbyTribes";
 import { useGeolocation } from "./hooks/useGeolocation";
 import { useTribeIdentity } from "./hooks/useTribeIdentity";
 import { useActiveTribe } from "./hooks/useActiveTribe";
-import { haversineDistance } from "./utils/geo";
+import { haversineDistance, GEOFENCE_RADIUS_M } from "./utils/geo";
 import type { Message } from "./components/MessageBubble";
+import type { GeoState } from "./hooks/useGeolocation";
 
 type Tribe = Doc<"tribes">;
 
@@ -22,17 +25,42 @@ type Tribe = Doc<"tribes">;
 
 interface InnerCircleProps {
   tribe: Tribe;
+  allTribes: Tribe[];
+  geo: GeoState;
   onLeave: () => void;
+  onJoinOther: (tribe: Tribe) => void;
 }
 
-function InnerCircle({ tribe, onLeave }: InnerCircleProps) {
+function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircleProps) {
   const identity = useTribeIdentity();
   const tribeId = tribe._id;
   const rawMessages = useQuery(api.messages.list, { tribeId });
   const sendMutation = useMutation(api.messages.send);
   const toggleLikeMutation = useMutation(api.messages.toggleLike);
 
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+  const [showNearby, setShowNearby] = useState(false);
+
   const messages = (rawMessages ?? []) as unknown as Message[];
+  const openThreadMessage = openThreadId
+    ? messages.find((m) => m._id === openThreadId) ?? null
+    : null;
+
+  // Nearby campfires (excluding current, within 50km)
+  const nearbyOthers = useMemo(() => {
+    if (!geo.coords) return [];
+    return allTribes
+      .filter((t) => (t._id as string) !== (tribeId as string))
+      .filter((t) => haversineDistance(geo.coords!.lat, geo.coords!.lng, t.lat, t.lng) <= 50_000);
+  }, [allTribes, tribeId, geo.coords]);
+
+  // Count campfires within the detection radius
+  const nearbyCount = useMemo(() => {
+    if (!geo.coords) return 0;
+    return nearbyOthers.filter(
+      (t) => haversineDistance(geo.coords!.lat, geo.coords!.lng, t.lat, t.lng) <= GEOFENCE_RADIUS_M
+    ).length;
+  }, [nearbyOthers, geo.coords]);
 
   const send = (text: string) =>
     sendMutation({
@@ -49,11 +77,85 @@ function InnerCircle({ tribe, onLeave }: InnerCircleProps) {
       userId: identity.userId,
     });
 
+  const handleJoinOther = (t: Tribe) => {
+    setShowNearby(false);
+    onJoinOther(t);
+  };
+
   return (
     <>
-      <TribeHeader identity={identity} tribeName={tribe.name} onLeave={onLeave} />
-      <ChatFeed messages={messages} currentUserId={identity.userId} onLike={handleLike} />
+      <TribeHeader
+        identity={identity}
+        tribeName={tribe.name}
+        tribeId={tribeId as string}
+        onLeave={onLeave}
+        nearbyCount={nearbyOthers.length}
+        onShowNearby={nearbyOthers.length > 0 ? () => setShowNearby(true) : undefined}
+      />
+      <ChatFeed
+        messages={messages}
+        currentUserId={identity.userId}
+        onLike={handleLike}
+        onThreadReply={(id) => setOpenThreadId(id)}
+      />
       <MessageInput onSend={send} tribeName={identity.tribeName} />
+
+      {/* Thread panel */}
+      <AnimatePresence>
+        {openThreadMessage && (
+          <ThreadPanel
+            key={openThreadMessage._id}
+            parentMessage={openThreadMessage}
+            tribeId={tribeId}
+            currentUserId={identity.userId}
+            currentUserName={identity.tribeName}
+            avatarSeed={identity.avatarSeed}
+            onClose={() => setOpenThreadId(null)}
+            onLike={handleLike}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Nearby fires bottom sheet */}
+      <AnimatePresence>
+        {showNearby && (
+          <motion.div
+            className="absolute inset-0 z-40 flex flex-col justify-end"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setShowNearby(false)}
+            />
+            <motion.div
+              className="relative z-10 bg-[#050f05] border-t border-fire-ember/20 rounded-t-2xl px-4 pt-4 pb-6 max-h-[65vh] overflow-y-auto"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-mono text-sm font-bold text-white flex-1">
+                  Nearby Fires
+                </h3>
+                <button
+                  onClick={() => setShowNearby(false)}
+                  className="font-mono text-xs text-fire-char/50 hover:text-fire-ember/80 transition-colors px-2 py-1 rounded-lg hover:bg-fire-ash/40"
+                >
+                  ✕
+                </button>
+              </div>
+              <NearbyTribes
+                tribes={nearbyOthers}
+                userCoords={geo.coords!}
+                onJoin={handleJoinOther}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
@@ -72,9 +174,33 @@ function AppShell() {
     ? tribes.find((t) => (t._id as string) === activeTribeId) ?? null
     : null;
 
+  // Clear active tribe from state if it expired/disappeared
   useEffect(() => {
-    if (activeTribeId && !activeTribe) setActiveTribeId(null);
-  }, [activeTribeId, activeTribe, setActiveTribeId]);
+    if (activeTribeId && tribes.length > 0 && !activeTribe) setActiveTribeId(null);
+  }, [activeTribeId, activeTribe, tribes.length, setActiveTribeId]);
+
+  // Sync activeTribeId → URL hash
+  useEffect(() => {
+    const currentHash = window.location.hash.slice(1);
+    const desired = activeTribeId ?? "";
+    if (currentHash !== desired) {
+      window.history.pushState(
+        null,
+        "",
+        activeTribeId ? `#${activeTribeId}` : window.location.pathname
+      );
+    }
+  }, [activeTribeId]);
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const onPopState = () => {
+      const hash = window.location.hash.slice(1);
+      setActiveTribeId(hash || null);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [setActiveTribeId]);
 
   // Auto-join the most active tribe inside the geofence on first load.
   useEffect(() => {
@@ -92,6 +218,7 @@ function AppShell() {
   const handleJoin = (tribe: Tribe) => setActiveTribeId(tribe._id as string);
   const handleCreate = (tribeId: string) => setActiveTribeId(tribeId);
   const handleLeave = () => setActiveTribeId(null);
+  const handleJoinOther = (tribe: Tribe) => setActiveTribeId(tribe._id as string);
 
   const screen = !activeTribe ? "landing" : "inner";
 
@@ -109,10 +236,16 @@ function AppShell() {
         ) : (
           <div
             key="inner"
-            className="flex flex-col flex-1 min-h-[100dvh]"
+            className="relative flex flex-col flex-1 min-h-[100dvh]"
             data-testid="inner-circle"
           >
-            <InnerCircle tribe={activeTribe!} onLeave={handleLeave} />
+            <InnerCircle
+              tribe={activeTribe!}
+              allTribes={tribes}
+              geo={geo}
+              onLeave={handleLeave}
+              onJoinOther={handleJoinOther}
+            />
           </div>
         )}
       </AnimatePresence>

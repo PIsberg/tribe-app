@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 
-// Helper: grant geolocation at the tribe center (inside 300m)
+// Helper: grant geolocation at the tribe center (inside 5km)
 async function grantInsideLocation(page: Page) {
   await page.context().setGeolocation({ latitude: 51.5074, longitude: -0.1278 });
   await page.context().grantPermissions(["geolocation"]);

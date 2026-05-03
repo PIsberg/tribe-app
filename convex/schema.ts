@@ -19,7 +19,10 @@ export default defineSchema({
     timestamp: v.number(),
     avatarSeed: v.string(),
     likes: v.array(v.string()),
+    parentId: v.optional(v.id("messages")),
+    replyCount: v.optional(v.number()),
   })
     .index("by_tribeId_and_timestamp", ["tribeId", "timestamp"])
-    .index("by_timestamp", ["timestamp"]),
+    .index("by_timestamp", ["timestamp"])
+    .index("by_parentId_and_timestamp", ["parentId", "timestamp"]),
 });
