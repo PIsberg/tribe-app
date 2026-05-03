@@ -39,11 +39,16 @@ export function MessageInput({ onSend, disabled, tribeName }: Props) {
         if (!json.storageId) throw new Error("Upload returned no storageId");
         storageId = json.storageId;
       }
-      await Promise.resolve(onSend(text, storageId));
+      const sendResult = onSend(text, storageId) as unknown;
       setValue("");
       setImageFile(null);
       setImagePreview(null);
       inputRef.current?.focus();
+      if (sendResult && typeof (sendResult as Promise<unknown>).then === "function") {
+        (sendResult as Promise<unknown>).catch((err: unknown) => {
+          setError(err instanceof Error ? err.message : "Failed to send");
+        });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to send");
     } finally {
