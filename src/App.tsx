@@ -15,7 +15,7 @@ import { NearbyTribes } from "./components/NearbyTribes";
 import { useGeolocation } from "./hooks/useGeolocation";
 import { useTribeIdentity } from "./hooks/useTribeIdentity";
 import { useActiveTribe } from "./hooks/useActiveTribe";
-import { haversineDistance, GEOFENCE_RADIUS_M } from "./utils/geo";
+import { haversineDistance } from "./utils/geo";
 import type { Message } from "./components/MessageBubble";
 import type { GeoState } from "./hooks/useGeolocation";
 
@@ -53,14 +53,6 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
       .filter((t) => (t._id as string) !== (tribeId as string))
       .filter((t) => haversineDistance(geo.coords!.lat, geo.coords!.lng, t.lat, t.lng) <= 50_000);
   }, [allTribes, tribeId, geo.coords]);
-
-  // Count campfires within the detection radius
-  const nearbyCount = useMemo(() => {
-    if (!geo.coords) return 0;
-    return nearbyOthers.filter(
-      (t) => haversineDistance(geo.coords!.lat, geo.coords!.lng, t.lat, t.lng) <= GEOFENCE_RADIUS_M
-    ).length;
-  }, [nearbyOthers, geo.coords]);
 
   const send = (text: string) =>
     sendMutation({
