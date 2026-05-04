@@ -6,6 +6,12 @@
 
 ---
 
+## Demo
+
+[![Watch the demo](https://img.youtube.com/vi/IsXxhhZ-9zk/0.jpg)](https://www.youtube.com/shorts/IsXxhhZ-9zk)
+
+---
+
 ## Features
 
 | Feature | Details |
