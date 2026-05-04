@@ -69,6 +69,15 @@ async function enterInnerCircle(page: Page) {
 
 test.describe("tribe — landing state", () => {
   test("shows locating message while requesting location", async ({ page }) => {
+    // Freeze geolocation so the app stays in "requesting" state long enough
+    // for the framer-motion fade-ins to complete before Playwright checks visibility.
+    // Without this, the pre-granted location resolves before opacity reaches 1.
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "geolocation", {
+        value: { getCurrentPosition() {}, watchPosition() { return 0; }, clearWatch() {} },
+        configurable: true,
+      });
+    });
     await page.goto("/");
     await expect(page.locator("text=Reading your signal")).toBeVisible({ timeout: 5000 });
   });
