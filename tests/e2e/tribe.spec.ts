@@ -168,8 +168,19 @@ test.describe("tribe — inner circle", () => {
     await expect(header.locator(".font-mono.text-fire-glow")).toBeVisible();
   });
 
-  test("manifesto section is visible", async ({ page }) => {
-    await expect(page.locator("text=The Tribe Manifesto")).toBeVisible();
+  test("manifesto is accessible via the info button", async ({ page }) => {
+    // Manifesto is behind the ℹ button in the inner circle; not directly in the page flow
+    const infoBtn = page.locator("[aria-label='About this fire']");
+    await expect(infoBtn).toBeVisible();
+    await infoBtn.click();
+    await expect(page.locator("[aria-label='Tribe Manifesto']")).toBeVisible({ timeout: 2000 });
+  });
+
+  test("manifesto sheet can be closed", async ({ page }) => {
+    await page.locator("[aria-label='About this fire']").click();
+    await expect(page.locator("[aria-label='Tribe Manifesto']")).toBeVisible({ timeout: 2000 });
+    await page.locator("[aria-label='Close manifesto']").click();
+    await expect(page.locator("[aria-label='Tribe Manifesto']")).not.toBeVisible({ timeout: 2000 });
   });
 });
 
@@ -247,6 +258,19 @@ test.describe("tribe — message features", () => {
 
   test("image attach button is visible", async ({ page }) => {
     await expect(page.locator("[aria-label='Attach image']")).toBeVisible();
+  });
+
+  test("share button falls back to clipboard and shows confirmation", async ({ page }) => {
+    // Disable navigator.share so clipboard fallback is used
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "share", { value: undefined, configurable: true });
+    });
+    // Re-enter after patching navigator
+    await enterInnerCircle(page);
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.locator("[aria-label='Share campfire link']").click();
+    // Confirmation text appears briefly
+    await expect(page.locator("text=✓ copied")).toBeVisible({ timeout: 3000 });
   });
 });
 
@@ -474,9 +498,10 @@ test.describe("tribe — ad units", () => {
 // ─── Accessibility ────────────────────────────────────────────────────────────
 
 test.describe("tribe — accessibility", () => {
-  test("page has a main landmark or section", async ({ page }) => {
+  test("manifesto is reachable via the info button", async ({ page }) => {
     await enterInnerCircle(page);
-    await expect(page.locator("[aria-label='Tribe Manifesto']")).toBeVisible();
+    await page.locator("[aria-label='About this fire']").click();
+    await expect(page.locator("[aria-label='Tribe Manifesto']")).toBeVisible({ timeout: 2000 });
   });
 
   test("message input has accessible label", async ({ page }) => {
@@ -499,5 +524,42 @@ test.describe("tribe — mobile layout", () => {
     await enterInnerCircle(page);
     await expect(page.locator("[data-testid='chat-feed']")).toBeVisible();
     await expect(page.locator("[aria-label='Message input']")).toBeVisible();
+  });
+});
+
+// ─── Layout stability ─────────────────────────────────────────────────────────
+
+test.describe("tribe — layout stability", () => {
+  test.beforeEach(async ({ page }) => {
+    await enterInnerCircle(page);
+  });
+
+  test("message input stays visible after clicking it", async ({ page }) => {
+    const input = page.locator("[aria-label='Message input']");
+    await input.click();
+    // Input must still be in viewport after focus — the old scroll bug would hide it
+    await expect(input).toBeInViewport({ timeout: 1000 });
+  });
+
+  test("message input stays visible after typing", async ({ page }) => {
+    const input = page.locator("[aria-label='Message input']");
+    await input.click();
+    await input.type("testing scroll");
+    await expect(input).toBeInViewport({ timeout: 1000 });
+    await expect(page.locator("[aria-label='Send message']")).toBeInViewport({ timeout: 1000 });
+  });
+
+  test("nearby fires sheet closes when X is clicked", async ({ page }) => {
+    // Only run if there's a nearby-fires button visible (requires nearbyCount > 0)
+    const nearbyBtn = page.locator("[aria-label='Show nearby campfires']");
+    const hasnearby = await nearbyBtn.isVisible().catch(() => false);
+    if (!hasnearby) {
+      test.skip();
+      return;
+    }
+    await nearbyBtn.click();
+    await expect(page.locator("text=Nearby Fires")).toBeVisible({ timeout: 2000 });
+    await page.locator("button", { hasText: "✕" }).first().click();
+    await expect(page.locator("text=Nearby Fires")).not.toBeVisible({ timeout: 2000 });
   });
 });

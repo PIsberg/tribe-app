@@ -128,12 +128,13 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
           onClick={onLike}
           whileTap={{ scale: 0.8 }}
           aria-label="Like message"
-          className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-mono transition-colors ${
+          title="Like"
+          className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-mono transition-all duration-150 ${
             likedByMe
-              ? "text-fire-ember"
+              ? "text-fire-ember opacity-100"
               : hasLikes
-              ? "text-fire-char/50 hover:text-fire-ember/70"
-              : "text-fire-char/40 hover:text-fire-ember/70 md:opacity-50 md:group-hover:opacity-100"
+              ? "text-fire-char/60 hover:text-fire-ember/80 opacity-100"
+              : "text-fire-char/50 hover:text-fire-ember/80 opacity-0 group-hover:opacity-100"
           }`}
         >
           <span>{likedByMe ? "🔥" : "🕯️"}</span>
@@ -145,10 +146,11 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
             onClick={onThreadReply}
             whileTap={{ scale: 0.8 }}
             aria-label="Reply in thread"
-            className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-mono transition-colors ${
+            title="Reply in thread"
+            className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-mono transition-all duration-150 ${
               hasReplies
-                ? "text-fire-glow/60 hover:text-fire-glow"
-                : "text-fire-char/40 hover:text-fire-glow/70 md:opacity-50 md:group-hover:opacity-100"
+                ? "text-fire-glow/70 hover:text-fire-glow opacity-100"
+                : "text-fire-char/50 hover:text-fire-glow/80 opacity-0 group-hover:opacity-100"
             }`}
           >
             <span>💬</span>

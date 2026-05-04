@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Avatar } from "./Avatar";
 import type { TribeIdentity } from "../hooks/useTribeIdentity";
@@ -11,6 +12,7 @@ interface Props {
   nearbyCount?: number;
   onShowNearby?: () => void;
   onEditName?: () => void;
+  onShowManifesto?: () => void;
 }
 
 export function TribeHeader({
@@ -22,15 +24,23 @@ export function TribeHeader({
   nearbyCount,
   onShowNearby,
   onEditName,
+  onShowManifesto,
 }: Props) {
   const shareUrl = `${window.location.origin}${window.location.pathname}#${tribeId}`;
+  const [copied, setCopied] = useState(false);
 
   const handleShare = async () => {
-    if (navigator.share) {
-      await navigator.share({ title: tribeName, url: shareUrl });
-    } else {
-      await navigator.clipboard.writeText(shareUrl);
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: tribeName, url: shareUrl });
+        return;
+      }
+    } catch {
+      // AbortError (user cancelled) or unsupported — fall through to clipboard
     }
+    await navigator.clipboard.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -73,12 +83,28 @@ export function TribeHeader({
       {/* Share link button */}
       <button
         onClick={() => void handleShare()}
-        className="font-mono text-[10px] text-fire-char/40 hover:text-fire-glow/70 transition-colors px-1.5 py-1 rounded-lg hover:bg-fire-ash/40 flex-shrink-0"
+        className="relative font-mono text-[10px] text-fire-char/40 hover:text-fire-glow/70 transition-colors px-1.5 py-1 rounded-lg hover:bg-fire-ash/40 flex-shrink-0"
         aria-label="Share campfire link"
         title="Copy link"
       >
-        🔗
+        {copied ? (
+          <span className="text-fire-glow text-[10px]">✓ copied</span>
+        ) : (
+          "🔗"
+        )}
       </button>
+
+      {/* Manifesto / info button */}
+      {onShowManifesto && (
+        <button
+          onClick={onShowManifesto}
+          className="font-mono text-[10px] text-fire-char/40 hover:text-fire-glow/70 transition-colors px-1.5 py-1 rounded-lg hover:bg-fire-ash/40 flex-shrink-0"
+          aria-label="About this fire"
+          title="About tribe"
+        >
+          ℹ
+        </button>
+      )}
 
       {/* Nearby fires button */}
       {onShowNearby && (
