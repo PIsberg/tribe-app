@@ -35,6 +35,7 @@
 | Styling | Tailwind CSS v3 + Framer Motion |
 | Map | Leaflet + react-leaflet (CartoDB dark tiles) |
 | Backend | Convex (real-time queries, mutations, file storage, crons) |
+| Native apps | Capacitor 8 (Android + iOS) |
 | Deployment | Vercel |
 | Tests | Playwright E2E |
 | CI/CD | GitHub Actions |
@@ -143,6 +144,35 @@ The `TribeManifesto` section provides article-style text to satisfy the content 
 
 ---
 
+## Native Apps (Android & iOS)
+
+Tribe is packaged as a real native app via [Capacitor](https://capacitorjs.com). The `android/` and `ios/` native projects are committed to the repo; the web assets inside them are excluded from git and regenerated on every sync.
+
+### Android (Windows / Mac / Linux)
+
+1. Install [Android Studio](https://developer.android.com/studio)
+2. Run `npm run cap:android` — builds the web app, syncs assets, opens Android Studio
+3. Hit **Run** in Android Studio to deploy to an emulator or connected device
+
+CI produces a **debug APK** on every push — download it from the **Actions → Build Native Apps** workflow artifacts.
+
+### iOS (requires Mac + Xcode)
+
+1. Run `npm run cap:ios` — builds the web app, syncs assets, opens Xcode
+2. Select a simulator or connected device and hit **Run**
+
+CI runs a simulator build (no code signing) on every push to `main` to catch compile errors early. Distributing to **TestFlight / App Store** requires adding signing secrets — see [WORKFLOWS.md](WORKFLOWS.md#ios-release-signing).
+
+### Updating native apps after web changes
+
+```bash
+npm run cap:sync          # rebuild + sync both platforms
+npx cap open android      # reopen Android Studio
+npx cap open ios          # reopen Xcode
+```
+
+---
+
 ## Geofence Radius
 
 The join radius is 1.5 km, set in `src/utils/geo.ts`:
@@ -159,6 +189,8 @@ The map also shows all campfires within a 50 km discovery radius.
 
 ```
 tribe/
+├── android/                       # Capacitor Android project (Android Studio)
+├── ios/                           # Capacitor iOS project (Xcode, Mac only)
 ├── src/
 │   ├── App.tsx                    # Root shell + screen state machine
 │   ├── main.tsx
@@ -201,7 +233,8 @@ tribe/
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                 # Lint + type-check + build + E2E on PR
-│       └── deploy.yml             # Deploy to Vercel on main push
+│       ├── deploy.yml             # Deploy to Vercel on main push
+│       └── build-native.yml      # Android APK + iOS simulator build
 ├── public/
 │   └── ads.txt
 ├── playwright.config.ts
@@ -225,6 +258,9 @@ tribe/
 | `npm run test:e2e:ui` | Playwright interactive UI mode |
 | `npm run convex:dev` | Start Convex dev server |
 | `npm run convex:deploy` | Deploy Convex functions |
+| `npm run cap:sync` | Build web app + sync assets to Android & iOS |
+| `npm run cap:android` | Build → sync → open Android Studio |
+| `npm run cap:ios` | Build → sync → open Xcode (Mac only) |
 
 ---
 
