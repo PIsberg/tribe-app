@@ -40,6 +40,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
 
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [showNearby, setShowNearby] = useState(false);
+  const [showManifesto, setShowManifesto] = useState(false);
   const [showNamePicker, setShowNamePicker] = useState(!identity.nameChosen);
 
   const messages = (rawMessages ?? []) as unknown as Message[];
@@ -86,6 +87,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
         nearbyCount={nearbyOthers.length}
         onShowNearby={nearbyOthers.length > 0 ? () => setShowNearby(true) : undefined}
         onEditName={() => setShowNamePicker(true)}
+        onShowManifesto={() => setShowManifesto(true)}
       />
       <ChatFeed
         messages={messages}
@@ -143,6 +145,42 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
             onClose={() => setOpenThreadId(null)}
             onLike={handleLike}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Manifesto bottom sheet */}
+      <AnimatePresence>
+        {showManifesto && (
+          <motion.div
+            className="absolute inset-0 z-40 flex flex-col justify-end"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setShowManifesto(false)}
+            />
+            <motion.div
+              className="relative z-10 bg-[#050f05] border-t border-fire-ember/20 rounded-t-2xl px-4 pt-4 pb-6 max-h-[75vh] overflow-y-auto"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <h3 className="font-mono text-sm font-bold text-white flex-1">About this fire</h3>
+                <button
+                  onClick={() => setShowManifesto(false)}
+                  className="font-mono text-xs text-fire-char/50 hover:text-fire-ember/80 transition-colors px-2 py-1 rounded-lg hover:bg-fire-ash/40"
+                  aria-label="Close manifesto"
+                >
+                  ✕
+                </button>
+              </div>
+              <TribeManifesto />
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -436,7 +474,7 @@ function AppShell() {
         ) : (
           <div
             key="inner"
-            className="relative flex flex-col flex-1 min-h-[100dvh]"
+            className="relative flex flex-col h-[100dvh]"
             data-testid="inner-circle"
           >
             <InnerCircle
@@ -449,7 +487,7 @@ function AppShell() {
           </div>
         )}
       </AnimatePresence>
-      <TribeManifesto />
+      {screen === "landing" && <TribeManifesto />}
     </div>
   );
 }
