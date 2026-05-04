@@ -12,9 +12,16 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "convex:dev": "npx convex dev",
-    "convex:deploy": "npx convex deploy"
+    "convex:deploy": "npx convex deploy",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:android": "npm run build && npx cap sync android && npx cap open android",
+    "cap:ios": "npm run build && npx cap sync ios && npx cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.1",
+    "@capacitor/cli": "^8.3.1",
+    "@capacitor/core": "^8.3.1",
+    "@capacitor/ios": "^8.3.1",
     "@types/leaflet": "^1.9.21",
     "convex": "^1.37.0",
     "framer-motion": "^12.38.0",
