@@ -176,7 +176,6 @@ export function TribeLanding({ geo, tribes, onJoin, onCreate }: Props) {
               {showMap ? (
                 <CampfireMap
                   key="map"
-                  tribes={tribes}
                   userCoords={geo.coords}
                   onJoin={(tribe) => { setShowMap(false); handleJoin(tribe); }}
                   onClose={() => setShowMap(false)}

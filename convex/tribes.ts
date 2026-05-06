@@ -33,6 +33,27 @@ export const create = mutation({
   },
 });
 
+export const listWithCounts = query({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - TRIBE_TTL;
+    const tribes = await ctx.db
+      .query("tribes")
+      .withIndex("by_createdAt", (q) => q.gt("createdAt", cutoff))
+      .order("asc")
+      .take(100);
+    return Promise.all(
+      tribes.map(async (t) => {
+        const members = await ctx.db
+          .query("tribeMembers")
+          .withIndex("by_tribeId", (q) => q.eq("tribeId", t._id))
+          .collect();
+        return { ...t, memberCount: members.length };
+      })
+    );
+  },
+});
+
 export const deleteOldTribes = internalMutation({
   args: {},
   handler: async (ctx) => {

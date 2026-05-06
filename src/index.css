@@ -66,3 +66,12 @@
   70%       { opacity: 0.95; }
   85%       { opacity: 0.68; }
 }
+
+@keyframes fire-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%       { opacity: 0.08; transform: scale(2.6); }
+}
+.fire-pulse-ring {
+  animation: fire-pulse 2s ease-out infinite;
+  transform-origin: center;
+}
