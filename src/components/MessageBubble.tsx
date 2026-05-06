@@ -77,8 +77,8 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
   const ageStr = formatAge(message.timestamp);
 
   const nameColor =
-    heat === "hot" ? "text-fire-ember" : heat === "warm" ? "text-fire-glow/70" : "text-fire-char/45";
-  const textColor = heat === "cold" ? "text-white/35" : "text-white/85";
+    heat === "hot" ? "text-fire-ember" : heat === "warm" ? "text-fire-glow/85" : "text-fire-smoke/70";
+  const textColor = heat === "cold" ? "text-white/55" : "text-white/90";
   const borderColor =
     heat === "hot" ? "border-l-fire-ember/60" : isOwn ? "border-l-fire-glow/20" : "border-l-transparent";
 
@@ -101,7 +101,7 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
         <span className={`font-mono text-[10px] font-bold mr-1.5 ${nameColor}`}>
           {message.author}
         </span>
-        <span className="font-mono text-[9px] text-fire-char/35 mr-1.5">{ageStr}</span>
+        <span className="font-mono text-[9px] text-fire-smoke/55 mr-1.5">{ageStr}</span>
         {heat === "hot" && (
           <motion.span
             className="text-[9px] mr-1"
@@ -129,16 +129,16 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
           whileTap={{ scale: 0.8 }}
           aria-label="Like message"
           title="Like"
-          className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-mono transition-all duration-150 ${
+          className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-mono transition-all duration-150 ${
             likedByMe
               ? "text-fire-ember opacity-100"
               : hasLikes
-              ? "text-fire-char/60 hover:text-fire-ember/80 opacity-100"
-              : "text-fire-char/50 hover:text-fire-ember/80 opacity-0 group-hover:opacity-100"
+              ? "text-fire-glow/90 hover:text-fire-ember opacity-100"
+              : "text-fire-smoke/70 hover:text-fire-ember/80 opacity-0 group-hover:opacity-100"
           }`}
         >
           <span>{likedByMe ? "🔥" : "🕯️"}</span>
-          {hasLikes && <span>{message.likes.length}</span>}
+          {hasLikes && <span className="font-bold tabular-nums">{message.likes.length}</span>}
         </motion.button>
 
         {onThreadReply && (
@@ -147,14 +147,14 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
             whileTap={{ scale: 0.8 }}
             aria-label="Reply in thread"
             title="Reply in thread"
-            className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-mono transition-all duration-150 ${
+            className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-mono transition-all duration-150 ${
               hasReplies
-                ? "text-fire-glow/70 hover:text-fire-glow opacity-100"
-                : "text-fire-char/50 hover:text-fire-glow/80 opacity-0 group-hover:opacity-100"
+                ? "text-fire-glow/90 hover:text-fire-glow opacity-100"
+                : "text-fire-smoke/70 hover:text-fire-glow/80 opacity-0 group-hover:opacity-100"
             }`}
           >
             <span>💬</span>
-            {hasReplies && <span>{message.replyCount}</span>}
+            {hasReplies && <span className="font-bold tabular-nums">{message.replyCount}</span>}
           </motion.button>
         )}
       </div>
