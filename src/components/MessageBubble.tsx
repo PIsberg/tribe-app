@@ -45,18 +45,28 @@ function formatAge(timestamp: number): string {
   return `${Math.floor(mins / 60)}h`;
 }
 
-type TextPart = { type: "text" | "link" | "mention"; value: string };
+type TextPart =
+  | { type: "text"; value: string }
+  | { type: "link"; value: string }
+  | { type: "mention"; value: string }
+  | { type: "bold"; value: string }
+  | { type: "italic"; value: string }
+  | { type: "code"; value: string };
 
 function tokenize(text: string): TextPart[] {
   const parts: TextPart[] = [];
-  // Combined regex: URLs first, then @mentions
-  const re = /https?:\/\/[^\s<>"]+[^\s<>".,;:!?)\]]|@[\w\-]+/g;
+  // Order: code first (to avoid bold/italic inside code), then URLs, then mentions, then bold/italic
+  const re = /`([^`]+)`|\*\*([^*]+)\*\*|\*([^*]+)\*|https?:\/\/[^\s<>"]+[^\s<>".,;:!?)\]]|@[\w\-]+/g;
   let last = 0;
   for (const match of text.matchAll(re)) {
     if (match.index! > last) parts.push({ type: "text", value: text.slice(last, match.index) });
-    const val = match[0];
-    parts.push({ type: val.startsWith("@") ? "mention" : "link", value: val });
-    last = match.index! + val.length;
+    const full = match[0];
+    if (match[1] !== undefined) parts.push({ type: "code", value: match[1] });
+    else if (match[2] !== undefined) parts.push({ type: "bold", value: match[2] });
+    else if (match[3] !== undefined) parts.push({ type: "italic", value: match[3] });
+    else if (full.startsWith("@")) parts.push({ type: "mention", value: full });
+    else parts.push({ type: "link", value: full });
+    last = match.index! + full.length;
   }
   if (last < text.length) parts.push({ type: "text", value: text.slice(last) });
   return parts;
@@ -90,6 +100,15 @@ function MessageText({ text, textColor, currentUserName }: { text: string; textC
             >
               {p.value}
             </span>
+          );
+        }
+        if (p.type === "bold") return <strong key={i} className="font-bold">{p.value}</strong>;
+        if (p.type === "italic") return <em key={i} className="italic">{p.value}</em>;
+        if (p.type === "code") {
+          return (
+            <code key={i} className="font-mono text-[12px] bg-fire-ash/60 text-fire-smoke px-1 py-0.5 rounded">
+              {p.value}
+            </code>
           );
         }
         return <span key={i}>{p.value}</span>;
