@@ -49,11 +49,13 @@ export function ChatFeed({ messages, currentUserId, currentUserName, onLike, onT
     return () => el.removeEventListener("scroll", onScroll);
   }, [isNearBottom]);
 
-  // Auto-scroll when new messages arrive — but only if already near bottom
+  // Auto-scroll when new messages arrive. On first load, always land at bottom
+  // (standard chat UX); afterwards only auto-scroll if the user is near bottom.
   useEffect(() => {
     const newCount = topLevel.length - prevLengthRef.current;
     if (newCount > 0) {
-      if (isNearBottom()) {
+      const isFirstLoad = prevLengthRef.current === 0;
+      if (isFirstLoad || isNearBottom()) {
         const el = feedRef.current;
         if (el) el.scrollTop = el.scrollHeight;
       } else {

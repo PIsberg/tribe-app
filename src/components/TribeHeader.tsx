@@ -119,7 +119,7 @@ export function TribeHeader({
               transition={{ duration: 0.12 }}
             >
               <button
-                onClick={() => { void handleShare(); setMenuOpen(false); }}
+                onClick={() => { void handleShare(); }}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 font-mono text-xs text-fire-smoke/80 hover:bg-fire-ash/50 hover:text-white transition-colors text-left"
                 aria-label="Share campfire link"
               >
