@@ -231,10 +231,20 @@ export function MessageInput({ onSend, disabled, tribeName, tribeId, userId, mut
         )}
       </AnimatePresence>
 
-      {isMuted ? (
-        <MutedBanner until={mutedUntil!} />
-      ) : (
-        <div className="flex gap-2 items-end relative">
+      <AnimatePresence>
+        {isMuted && mutedUntil && (
+          <motion.div
+            key="muted-banner"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            <MutedBanner until={mutedUntil} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="flex gap-2 items-end relative">
           <AnimatePresence>
             {showEmoji && (
               <EmojiPicker
@@ -325,7 +335,6 @@ export function MessageInput({ onSend, disabled, tribeName, tribeId, userId, mut
             )}
           </motion.button>
         </div>
-      )}
     </motion.form>
   );
 }

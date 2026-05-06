@@ -38,7 +38,7 @@ export const joinTribe = mutation({
 
     const tribe = await ctx.db.get(tribeId);
     if (tribe) {
-      await ctx.scheduler.runAfter(1000, internal.bots.welcomeUser, {
+      await ctx.scheduler.runAfter(5000, internal.bots.welcomeUser, {
         tribeId,
         userName,
         tribeName: tribe.name,
