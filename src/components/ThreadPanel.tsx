@@ -137,6 +137,7 @@ export function ThreadPanel({
               isOwn={reply.authorId === currentUserId}
               likedByMe={(reply.likes ?? []).includes(currentUserId)}
               onLike={() => onLike(reply._id)}
+              currentUserName={currentUserName}
             />
           ))
         )}
