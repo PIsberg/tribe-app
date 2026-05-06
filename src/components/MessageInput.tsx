@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useRef, useCallback, useEffect, type FormEvent, type KeyboardEvent } from "react";
+import { useState, useRef, useCallback, useEffect, useSyncExternalStore, type FormEvent, type KeyboardEvent } from "react";
 import { useMutation } from "convex/react";
 import { ConvexError } from "convex/values";
 import { api } from "../../convex/_generated/api";
@@ -61,15 +61,24 @@ export function MessageInput({ onSend, disabled, tribeName, tribeId, userId, mut
   const generateUploadUrl = useMutation(api.messages.generateUploadUrl);
   const setTypingMutation = useMutation(api.typing.setTyping);
 
-  const [isMuted, setIsMuted] = useState(false);
-  useEffect(() => {
-    if (!mutedUntil) { setIsMuted(false); return; }
-    const now = Date.now();
-    if (mutedUntil <= now) { setIsMuted(false); return; }
-    setIsMuted(true);
-    const t = setTimeout(() => setIsMuted(false), mutedUntil - now);
-    return () => clearTimeout(t);
-  }, [mutedUntil]);
+  // Track whether the mute window is active using useSyncExternalStore so that
+  // (a) Date.now() is never called in the render body, and (b) no setState is
+  // called synchronously inside an effect.  The subscribe function sets up a
+  // single setTimeout that fires exactly when the mute expires and calls
+  // notify(), letting React re-read the snapshot and re-render.
+  const muteSnapshot = useRef(Boolean(mutedUntil));
+  const isMuted = useSyncExternalStore(
+    useCallback((notify: () => void) => {
+      if (!mutedUntil) { muteSnapshot.current = false; return () => {}; }
+      const remaining = mutedUntil - Date.now();
+      if (remaining <= 0) { muteSnapshot.current = false; return () => {}; }
+      muteSnapshot.current = true;
+      const t = setTimeout(() => { muteSnapshot.current = false; notify(); }, remaining);
+      return () => clearTimeout(t);
+    }, [mutedUntil]),
+    () => muteSnapshot.current,
+    () => false,
+  );
 
   const sendTypingSignal = useCallback((isTyping: boolean) => {
     if (!tribeId || !userId) return;
