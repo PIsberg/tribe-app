@@ -11,6 +11,7 @@
 import type * as crons from "../crons.js";
 import type * as messages from "../messages.js";
 import type * as tribes from "../tribes.js";
+import type * as typing from "../typing.js";
 
 import type {
   ApiFromModules,
@@ -22,6 +23,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   messages: typeof messages;
   tribes: typeof tribes;
+  typing: typeof typing;
 }>;
 
 /**
