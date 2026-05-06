@@ -61,7 +61,15 @@ export function MessageInput({ onSend, disabled, tribeName, tribeId, userId, mut
   const generateUploadUrl = useMutation(api.messages.generateUploadUrl);
   const setTypingMutation = useMutation(api.typing.setTyping);
 
-  const isMuted = Boolean(mutedUntil && mutedUntil > Date.now());
+  const [isMuted, setIsMuted] = useState(false);
+  useEffect(() => {
+    if (!mutedUntil) { setIsMuted(false); return; }
+    const now = Date.now();
+    if (mutedUntil <= now) { setIsMuted(false); return; }
+    setIsMuted(true);
+    const t = setTimeout(() => setIsMuted(false), mutedUntil - now);
+    return () => clearTimeout(t);
+  }, [mutedUntil]);
 
   const sendTypingSignal = useCallback((isTyping: boolean) => {
     if (!tribeId || !userId) return;
