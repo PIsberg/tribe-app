@@ -12,6 +12,7 @@ import { TribeManifesto } from "./components/TribeManifesto";
 import { ThreadPanel } from "./components/ThreadPanel";
 import { NearbyTribes } from "./components/NearbyTribes";
 import { CreateTribeForm } from "./components/CreateTribeForm";
+import { TypingIndicator } from "./components/TypingIndicator";
 import { useGeolocation } from "./hooks/useGeolocation";
 import { useActiveTribe } from "./hooks/useActiveTribe";
 import { useTribeIdentity } from "./hooks/useTribeIdentity";
@@ -35,8 +36,10 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
   const identity = useTribeIdentity();
   const tribeId = tribe._id;
   const rawMessages = useQuery(api.messages.list, { tribeId });
+  const typingUsers = useQuery(api.typing.listTyping, { tribeId, excludeUserId: identity.userId });
   const sendMutation = useMutation(api.messages.send);
   const toggleLikeMutation = useMutation(api.messages.toggleLike);
+  const deleteMessageMutation = useMutation(api.messages.deleteMessage);
 
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [showNearby, setShowNearby] = useState(false);
@@ -72,6 +75,12 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
       userId: identity.userId,
     });
 
+  const handleDelete = (messageId: string) =>
+    deleteMessageMutation({
+      messageId: messageId as Id<"messages">,
+      userId: identity.userId,
+    });
+
   const handleJoinOther = (t: Tribe) => {
     setShowNearby(false);
     onJoinOther(t);
@@ -92,10 +101,18 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
       <ChatFeed
         messages={messages}
         currentUserId={identity.userId}
+        currentUserName={identity.tribeName}
         onLike={handleLike}
         onThreadReply={(id) => setOpenThreadId(id)}
+        onDeleteMessage={handleDelete}
       />
-      <MessageInput onSend={send} tribeName={identity.tribeName} />
+      <TypingIndicator typers={typingUsers ?? []} />
+      <MessageInput
+        onSend={send}
+        tribeName={identity.tribeName}
+        tribeId={tribeId}
+        userId={identity.userId}
+      />
 
       {/* Username picker — shown for new users who haven't chosen a name yet */}
       <AnimatePresence>

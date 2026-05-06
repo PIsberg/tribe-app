@@ -6,10 +6,11 @@ export default {
       colors: {
         fire: {
           deep: "#051a05",
-          ember: "#ff4500",
-          glow: "#ff8c00",
-          ash: "#2a2a2a",
-          char: "#4a4a4a",
+          ember: "#ff5722",
+          glow: "#ffa733",
+          ash: "#1f2620",
+          char: "#9a8e80",
+          smoke: "#cfc4b8",
         },
       },
       fontFamily: {

@@ -97,6 +97,27 @@ export const toggleLike = mutation({
   },
 });
 
+export const deleteMessage = mutation({
+  args: {
+    messageId: v.id("messages"),
+    userId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const message = await ctx.db.get(args.messageId);
+    if (!message || message.authorId !== args.userId) return;
+    if (message.storageId) await ctx.storage.delete(message.storageId);
+    if (message.parentId) {
+      const parent = await ctx.db.get(message.parentId);
+      if (parent) {
+        await ctx.db.patch(message.parentId, {
+          replyCount: Math.max(0, (parent.replyCount ?? 1) - 1),
+        });
+      }
+    }
+    await ctx.db.delete(args.messageId);
+  },
+});
+
 export const deleteOldMessages = internalMutation({
   args: {},
   handler: async (ctx) => {

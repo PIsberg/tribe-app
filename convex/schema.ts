@@ -11,6 +11,15 @@ export default defineSchema({
     lastMessageAt: v.optional(v.number()),
   }).index("by_createdAt", ["createdAt"]),
 
+  typing: defineTable({
+    tribeId: v.id("tribes"),
+    userId: v.string(),
+    userName: v.string(),
+    updatedAt: v.number(),
+  })
+    .index("by_tribeId", ["tribeId"])
+    .index("by_tribeId_and_userId", ["tribeId", "userId"]),
+
   messages: defineTable({
     tribeId: v.id("tribes"),
     text: v.string(),

@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useRef, useCallback, type FormEvent, type KeyboardEvent } from "react";
+import { useState, useRef, useCallback, useEffect, type FormEvent, type KeyboardEvent } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -8,9 +8,11 @@ interface Props {
   onSend: (text: string, storageId?: Id<"_storage">) => void;
   disabled?: boolean;
   tribeName: string;
+  tribeId?: Id<"tribes">;
+  userId?: string;
 }
 
-export function MessageInput({ onSend, disabled, tribeName }: Props) {
+export function MessageInput({ onSend, disabled, tribeName, tribeId, userId }: Props) {
   const [value, setValue] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -18,7 +20,22 @@ export function MessageInput({ onSend, disabled, tribeName }: Props) {
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const generateUploadUrl = useMutation(api.messages.generateUploadUrl);
+  const setTypingMutation = useMutation(api.typing.setTyping);
+
+  const sendTypingSignal = useCallback((isTyping: boolean) => {
+    if (!tribeId || !userId) return;
+    void setTypingMutation({ tribeId, userId, userName: tribeName, isTyping });
+  }, [tribeId, userId, tribeName, setTypingMutation]);
+
+  // Clear typing on unmount
+  useEffect(() => {
+    return () => {
+      sendTypingSignal(false);
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    };
+  }, [sendTypingSignal]);
 
   const submit = useCallback(async () => {
     const text = value.trim();
@@ -43,6 +60,8 @@ export function MessageInput({ onSend, disabled, tribeName }: Props) {
       setValue("");
       setImageFile(null);
       setImagePreview(null);
+      sendTypingSignal(false);
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
       inputRef.current?.focus();
       if (sendResult && typeof (sendResult as Promise<unknown>).then === "function") {
         (sendResult as Promise<unknown>).catch((err: unknown) => {
@@ -54,13 +73,25 @@ export function MessageInput({ onSend, disabled, tribeName }: Props) {
     } finally {
       setUploading(false);
     }
-  }, [value, imageFile, disabled, uploading, generateUploadUrl, onSend]);
+  }, [value, imageFile, disabled, uploading, generateUploadUrl, onSend, sendTypingSignal]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void submit();
     }
+  };
+
+  const onPaste = (e: React.ClipboardEvent) => {
+    const file = Array.from(e.clipboardData.items)
+      .find((item) => item.type.startsWith("image/"))
+      ?.getAsFile();
+    if (!file) return;
+    e.preventDefault();
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
   };
 
   const onSubmit = (e: FormEvent) => {
@@ -150,8 +181,18 @@ export function MessageInput({ onSend, disabled, tribeName }: Props) {
           <textarea
             ref={inputRef}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => {
+              setValue(e.target.value);
+              if (e.target.value.trim()) {
+                sendTypingSignal(true);
+                if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+                typingTimerRef.current = setTimeout(() => sendTypingSignal(false), 3000);
+              } else {
+                sendTypingSignal(false);
+              }
+            }}
             onKeyDown={onKeyDown}
+            onPaste={onPaste}
             placeholder={`${tribeName} says...`}
             disabled={disabled || uploading}
             rows={1}
