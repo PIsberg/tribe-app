@@ -54,7 +54,6 @@ export function ChatFeed({ messages, currentUserId, currentUserName, onLike, onT
     if (newCount > 0) {
       if (isNearBottom()) {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-        setUnreadCount(0);
       } else {
         setUnreadCount((c) => c + newCount);
         setShowScrollBtn(true);

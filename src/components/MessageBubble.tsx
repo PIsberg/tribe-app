@@ -56,7 +56,7 @@ type TextPart =
 function tokenize(text: string): TextPart[] {
   const parts: TextPart[] = [];
   // Order: code first (to avoid bold/italic inside code), then URLs, then mentions, then bold/italic
-  const re = /`([^`]+)`|\*\*([^*]+)\*\*|\*([^*]+)\*|https?:\/\/[^\s<>"]+[^\s<>".,;:!?)\]]|@[\w\-]+/g;
+  const re = /`([^`]+)`|\*\*([^*]+)\*\*|\*([^*]+)\*|https?:\/\/[^\s<>"]+[^\s<>".,;:!?)\]]|@[\w-]+/g;
   let last = 0;
   for (const match of text.matchAll(re)) {
     if (match.index! > last) parts.push({ type: "text", value: text.slice(last, match.index) });

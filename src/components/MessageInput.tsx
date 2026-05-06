@@ -73,7 +73,7 @@ export function MessageInput({ onSend, disabled, tribeName, tribeId, userId }: P
     } finally {
       setUploading(false);
     }
-  }, [value, imageFile, disabled, uploading, generateUploadUrl, onSend]);
+  }, [value, imageFile, disabled, uploading, generateUploadUrl, onSend, sendTypingSignal]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
