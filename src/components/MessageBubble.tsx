@@ -21,6 +21,7 @@ interface Props {
   likedByMe: boolean;
   onLike: () => void;
   onThreadReply?: () => void;
+  onDelete?: () => void;
 }
 
 function getHeat(timestamp: number): "hot" | "warm" | "cold" {
@@ -71,7 +72,7 @@ function MessageText({ text, textColor }: { text: string; textColor: string }) {
   );
 }
 
-export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply }: Props) {
+export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply, onDelete }: Props) {
   const heat = getHeat(message.timestamp);
   const avatarUrl = avatarDataUrl(message.avatarSeed);
   const ageStr = formatAge(message.timestamp);
