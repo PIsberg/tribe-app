@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Avatar } from "./Avatar";
 import { avatarDataUrl } from "../utils/avatar";
+import { ImageLightbox } from "./ImageLightbox";
 
 export type Message = {
   _id: string;
@@ -78,6 +80,7 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
   const heat = getHeat(message.timestamp);
   const avatarUrl = avatarDataUrl(message.avatarSeed);
   const ageStr = formatAge(message.timestamp);
+  const [lightbox, setLightbox] = useState(false);
 
   const nameColor =
     heat === "hot" ? "text-fire-ember" : heat === "warm" ? "text-fire-glow/85" : "text-fire-smoke/70";
@@ -129,9 +132,14 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
             <img
               src={message.imageUrl}
               alt="shared image"
-              className={`max-w-[220px] max-h-[200px] rounded-lg object-cover border border-fire-char/20 ${heat === "cold" ? "opacity-35" : "opacity-85"}`}
+              onClick={() => setLightbox(true)}
+              className={`max-w-[220px] max-h-[200px] rounded-lg object-cover border border-fire-char/20 cursor-zoom-in ${heat === "cold" ? "opacity-35" : "opacity-85"}`}
+              data-testid="message-image"
             />
           </div>
+        )}
+        {lightbox && message.imageUrl && (
+          <ImageLightbox src={message.imageUrl} onClose={() => setLightbox(false)} />
         )}
       </div>
 

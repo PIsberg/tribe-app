@@ -63,6 +63,18 @@ export function MessageInput({ onSend, disabled, tribeName }: Props) {
     }
   };
 
+  const onPaste = (e: React.ClipboardEvent) => {
+    const file = Array.from(e.clipboardData.items)
+      .find((item) => item.type.startsWith("image/"))
+      ?.getAsFile();
+    if (!file) return;
+    e.preventDefault();
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     void submit();
@@ -152,6 +164,7 @@ export function MessageInput({ onSend, disabled, tribeName }: Props) {
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={onKeyDown}
+            onPaste={onPaste}
             placeholder={`${tribeName} says...`}
             disabled={disabled || uploading}
             rows={1}
