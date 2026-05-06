@@ -6,6 +6,7 @@ import { TribeAd } from "./TribeAd";
 interface Props {
   messages: Message[];
   currentUserId: string;
+  currentUserName?: string;
   onLike: (messageId: string) => void;
   onThreadReply: (messageId: string) => void;
   onDeleteMessage?: (messageId: string) => void;
@@ -14,7 +15,7 @@ interface Props {
 const AD_INTERVAL = 7;
 const SCROLL_THRESHOLD = 120;
 
-export function ChatFeed({ messages, currentUserId, onLike, onThreadReply, onDeleteMessage }: Props) {
+export function ChatFeed({ messages, currentUserId, currentUserName, onLike, onThreadReply, onDeleteMessage }: Props) {
   const feedRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -137,6 +138,7 @@ export function ChatFeed({ messages, currentUserId, onLike, onThreadReply, onDel
                       : undefined
                   }
                   grouped={item.grouped}
+                  currentUserName={currentUserName}
                 />
               )
             )}

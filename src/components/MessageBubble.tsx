@@ -26,6 +26,7 @@ interface Props {
   onDelete?: () => void;
   /** True when same author sent the previous message within 5 min — hides avatar/name */
   grouped?: boolean;
+  currentUserName?: string;
 }
 
 function getHeat(timestamp: number): "hot" | "warm" | "cold" {
@@ -44,39 +45,60 @@ function formatAge(timestamp: number): string {
   return `${Math.floor(mins / 60)}h`;
 }
 
-function MessageText({ text, textColor }: { text: string; textColor: string }) {
-  const parts: Array<{ type: "text" | "link"; value: string }> = [];
+type TextPart = { type: "text" | "link" | "mention"; value: string };
+
+function tokenize(text: string): TextPart[] {
+  const parts: TextPart[] = [];
+  // Combined regex: URLs first, then @mentions
+  const re = /https?:\/\/[^\s<>"]+[^\s<>".,;:!?)\]]|@[\w\-]+/g;
   let last = 0;
-  for (const match of text.matchAll(/https?:\/\/[^\s<>"]+[^\s<>".,;:!?)\]]/g)) {
+  for (const match of text.matchAll(re)) {
     if (match.index! > last) parts.push({ type: "text", value: text.slice(last, match.index) });
-    parts.push({ type: "link", value: match[0] });
-    last = match.index! + match[0].length;
+    const val = match[0];
+    parts.push({ type: val.startsWith("@") ? "mention" : "link", value: val });
+    last = match.index! + val.length;
   }
   if (last < text.length) parts.push({ type: "text", value: text.slice(last) });
+  return parts;
+}
 
+function MessageText({ text, textColor, currentUserName }: { text: string; textColor: string; currentUserName?: string }) {
+  const parts = tokenize(text);
   return (
     <span className={`text-[13px] ${textColor} break-words`}>
-      {parts.map((p, i) =>
-        p.type === "link" ? (
-          <a
-            key={i}
-            href={p.value}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline decoration-amber-300/50 text-amber-300 hover:text-amber-200 transition-colors"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {p.value}
-          </a>
-        ) : (
-          <span key={i}>{p.value}</span>
-        )
-      )}
+      {parts.map((p, i) => {
+        if (p.type === "link") {
+          return (
+            <a
+              key={i}
+              href={p.value}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline decoration-amber-300/50 text-amber-300 hover:text-amber-200 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {p.value}
+            </a>
+          );
+        }
+        if (p.type === "mention") {
+          const isMe = currentUserName && p.value.slice(1).toLowerCase() === currentUserName.toLowerCase();
+          return (
+            <span
+              key={i}
+              className={`font-bold rounded px-0.5 ${isMe ? "text-fire-ember bg-fire-ember/15" : "text-fire-glow/90"}`}
+            >
+              {p.value}
+            </span>
+          );
+        }
+        return <span key={i}>{p.value}</span>;
+      })}
     </span>
   );
 }
 
-export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply, onDelete, grouped }: Props) {
+export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply, onDelete, grouped, currentUserName }: Props) {
   const heat = getHeat(message.timestamp);
   const avatarUrl = avatarDataUrl(message.avatarSeed);
   const ageStr = formatAge(message.timestamp);
@@ -126,7 +148,7 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
             )}
           </>
         )}
-        {message.text && <MessageText text={message.text} textColor={textColor} />}
+        {message.text && <MessageText text={message.text} textColor={textColor} currentUserName={currentUserName} />}
         {message.imageUrl && (
           <div className="mt-1.5">
             <img

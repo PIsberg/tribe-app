@@ -99,6 +99,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
       <ChatFeed
         messages={messages}
         currentUserId={identity.userId}
+        currentUserName={identity.tribeName}
         onLike={handleLike}
         onThreadReply={(id) => setOpenThreadId(id)}
         onDeleteMessage={handleDelete}
