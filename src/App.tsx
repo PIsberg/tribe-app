@@ -48,17 +48,14 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
   const [showNearby, setShowNearby] = useState(false);
   const [showManifesto, setShowManifesto] = useState(false);
   const [showNamePicker, setShowNamePicker] = useState(!identity.nameChosen);
-  const hasJoinedRef = useRef(false);
-
   const messages = (rawMessages ?? []) as unknown as Message[];
   const openThreadMessage = openThreadId
     ? messages.find((m) => m._id === openThreadId) ?? null
     : null;
 
-  // Register with the tribe and trigger the leader greeting as soon as the user has a name.
+  // Register with the tribe (or update name) whenever identity changes.
   useEffect(() => {
-    if (!identity.nameChosen || hasJoinedRef.current) return;
-    hasJoinedRef.current = true;
+    if (!identity.nameChosen) return;
     void joinTribeMutation({
       tribeId,
       userId: identity.userId,

@@ -26,7 +26,12 @@ export const joinTribe = mutation({
         q.eq("tribeId", tribeId).eq("userId", userId)
       )
       .first();
-    if (existing) return;
+    if (existing) {
+      if (existing.userName !== userName) {
+        await ctx.db.patch(existing._id, { userName });
+      }
+      return;
+    }
 
     await ctx.db.insert("tribeMembers", {
       tribeId,
