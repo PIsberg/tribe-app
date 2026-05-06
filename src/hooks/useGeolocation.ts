@@ -17,13 +17,32 @@ type InternalState = Pick<GeoState, "status" | "coords" | "error">;
 
 const GEO_SUPPORTED = Boolean(navigator?.geolocation);
 
+// Dev-only: set sessionStorage key "tribe:dev_geo" to "lat,lng" to bypass real geolocation.
+function getDevGeoOverride(): Coords | null {
+  if (!import.meta.env.DEV) return null;
+  try {
+    const raw = sessionStorage.getItem("tribe:dev_geo");
+    if (!raw) return null;
+    const [lat, lng] = raw.split(",").map(Number);
+    if (isNaN(lat) || isNaN(lng)) return null;
+    return { lat, lng };
+  } catch {
+    return null;
+  }
+}
+
 // center is the geofence origin — pass the active tribe's lat/lng, or omit for no check
 export function useGeolocation(center?: Coords): GeoState {
-  const [state, setState] = useState<InternalState>(() => ({
-    status: GEO_SUPPORTED ? "requesting" : "unsupported",
-    coords: null,
-    error: GEO_SUPPORTED ? null : "Geolocation not supported",
-  }));
+  const devOverride = getDevGeoOverride();
+
+  const [state, setState] = useState<InternalState>(() => {
+    if (devOverride) return { status: "granted", coords: devOverride, error: null };
+    return {
+      status: GEO_SUPPORTED ? "requesting" : "unsupported",
+      coords: null,
+      error: GEO_SUPPORTED ? null : "Geolocation not supported",
+    };
+  });
 
   const onPosition = useCallback((pos: GeolocationPosition) => {
     setState({
@@ -42,7 +61,7 @@ export function useGeolocation(center?: Coords): GeoState {
   }, []);
 
   useEffect(() => {
-    if (!GEO_SUPPORTED) return;
+    if (devOverride || !GEO_SUPPORTED) return;
 
     navigator.geolocation.getCurrentPosition(onPosition, onError, {
       enableHighAccuracy: true,
@@ -55,7 +74,7 @@ export function useGeolocation(center?: Coords): GeoState {
     });
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [onPosition, onError]);
+  }, [devOverride, onPosition, onError]);
 
   // distance and inside are derived from coords + center during render — no effect needed
   const distance =
