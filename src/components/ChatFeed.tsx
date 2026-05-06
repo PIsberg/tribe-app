@@ -86,9 +86,15 @@ export function ChatFeed({ messages, currentUserId, onLike, onThreadReply, onDel
     );
   }
 
-  const items: Array<{ type: "message"; data: Message } | { type: "ad"; key: string }> = [];
+  const GROUP_GAP_MS = 5 * 60 * 1000;
+  const items: Array<{ type: "message"; data: Message; grouped: boolean } | { type: "ad"; key: string }> = [];
   topLevel.forEach((msg, i) => {
-    items.push({ type: "message", data: msg });
+    const prev = topLevel[i - 1];
+    const grouped =
+      !!prev &&
+      prev.authorId === msg.authorId &&
+      msg.timestamp - prev.timestamp < GROUP_GAP_MS;
+    items.push({ type: "message", data: msg, grouped });
     if ((i + 1) % AD_INTERVAL === 0 && i < topLevel.length - 1) {
       items.push({ type: "ad", key: `ad-${i}` });
     }
@@ -130,6 +136,7 @@ export function ChatFeed({ messages, currentUserId, onLike, onThreadReply, onDel
                       ? () => onDeleteMessage(item.data._id)
                       : undefined
                   }
+                  grouped={item.grouped}
                 />
               )
             )}

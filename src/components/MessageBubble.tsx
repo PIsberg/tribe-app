@@ -22,6 +22,8 @@ interface Props {
   onLike: () => void;
   onThreadReply?: () => void;
   onDelete?: () => void;
+  /** True when same author sent the previous message within 5 min — hides avatar/name */
+  grouped?: boolean;
 }
 
 function getHeat(timestamp: number): "hot" | "warm" | "cold" {
@@ -72,7 +74,7 @@ function MessageText({ text, textColor }: { text: string; textColor: string }) {
   );
 }
 
-export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply, onDelete }: Props) {
+export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply, onDelete, grouped }: Props) {
   const heat = getHeat(message.timestamp);
   const avatarUrl = avatarDataUrl(message.avatarSeed);
   const ageStr = formatAge(message.timestamp);
@@ -92,24 +94,34 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
       animate={{ opacity: heat === "cold" ? 0.5 : 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
       transition={{ type: "spring", stiffness: 300, damping: 26 }}
-      className={`flex items-start gap-2 px-2 py-[3px] rounded-sm group hover:bg-fire-ash/10 border-l-2 transition-colors ${borderColor} ${isOwn ? "bg-fire-ash/5" : ""}`}
+      className={`flex items-start gap-2 px-2 rounded-sm group hover:bg-fire-ash/10 border-l-2 transition-colors ${borderColor} ${isOwn ? "bg-fire-ash/5" : ""} ${grouped ? "py-[1px]" : "py-[3px]"}`}
       data-testid="message-bubble"
     >
-      <Avatar url={avatarUrl} name={message.author} size={16} className="mt-[3px] flex-shrink-0" />
+      {/* Avatar: hidden for grouped messages, replaced by spacer */}
+      {grouped ? (
+        <div className="w-4 flex-shrink-0" />
+      ) : (
+        <Avatar url={avatarUrl} name={message.author} size={16} className="mt-[3px] flex-shrink-0" />
+      )}
 
       <div className="flex-1 min-w-0 leading-snug">
-        <span className={`font-mono text-[10px] font-bold mr-1.5 ${nameColor}`}>
-          {message.author}
-        </span>
-        <span className="font-mono text-[9px] text-fire-smoke/55 mr-1.5">{ageStr}</span>
-        {heat === "hot" && (
-          <motion.span
-            className="text-[9px] mr-1"
-            animate={{ opacity: [1, 0.5, 1] }}
-            transition={{ duration: 1.2, repeat: Infinity }}
-          >
-            🔥
-          </motion.span>
+        {/* Author line: hidden when grouped */}
+        {!grouped && (
+          <>
+            <span className={`font-mono text-[10px] font-bold mr-1.5 ${nameColor}`}>
+              {message.author}
+            </span>
+            <span className="font-mono text-[9px] text-fire-smoke/55 mr-1.5">{ageStr}</span>
+            {heat === "hot" && (
+              <motion.span
+                className="text-[9px] mr-1"
+                animate={{ opacity: [1, 0.5, 1] }}
+                transition={{ duration: 1.2, repeat: Infinity }}
+              >
+                🔥
+              </motion.span>
+            )}
+          </>
         )}
         {message.text && <MessageText text={message.text} textColor={textColor} />}
         {message.imageUrl && (
@@ -155,6 +167,18 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
           >
             <span>💬</span>
             {hasReplies && <span className="font-bold tabular-nums">{message.replyCount}</span>}
+          </motion.button>
+        )}
+
+        {onDelete && (
+          <motion.button
+            onClick={onDelete}
+            whileTap={{ scale: 0.8 }}
+            aria-label="Delete message"
+            title="Delete"
+            className="flex items-center px-1 py-0.5 rounded text-[10px] font-mono text-fire-smoke/30 hover:text-fire-ember/80 opacity-0 group-hover:opacity-100 transition-all duration-150"
+          >
+            ✕
           </motion.button>
         )}
       </div>
