@@ -31,7 +31,8 @@ export function ChatFeed({ messages, currentUserId, currentUserName, onLike, onT
   }, []);
 
   const scrollToBottom = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = feedRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
     setUnreadCount(0);
   }, []);
 
@@ -53,7 +54,8 @@ export function ChatFeed({ messages, currentUserId, currentUserName, onLike, onT
     const newCount = topLevel.length - prevLengthRef.current;
     if (newCount > 0) {
       if (isNearBottom()) {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+        const el = feedRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
       } else {
         setUnreadCount((c) => c + newCount);
         setShowScrollBtn(true);

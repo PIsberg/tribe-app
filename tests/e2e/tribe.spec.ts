@@ -169,14 +169,15 @@ test.describe("tribe — inner circle", () => {
   });
 
   test("manifesto is accessible via the info button", async ({ page }) => {
-    // Manifesto is behind the ℹ button in the inner circle; not directly in the page flow
+    await page.locator("[aria-label='More options']").click();
     const infoBtn = page.locator("[aria-label='About this fire']");
-    await expect(infoBtn).toBeVisible();
+    await expect(infoBtn).toBeVisible({ timeout: 2000 });
     await infoBtn.click();
     await expect(page.locator("[aria-label='Tribe Manifesto']")).toBeVisible({ timeout: 2000 });
   });
 
   test("manifesto sheet can be closed", async ({ page }) => {
+    await page.locator("[aria-label='More options']").click();
     await page.locator("[aria-label='About this fire']").click();
     await expect(page.locator("[aria-label='Tribe Manifesto']")).toBeVisible({ timeout: 2000 });
     await page.locator("[aria-label='Close manifesto']").click();
@@ -268,9 +269,10 @@ test.describe("tribe — message features", () => {
     // Re-enter after patching navigator
     await enterInnerCircle(page);
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.locator("[aria-label='More options']").click();
     await page.locator("[aria-label='Share campfire link']").click();
     // Confirmation text appears briefly
-    await expect(page.locator("text=✓ copied")).toBeVisible({ timeout: 3000 });
+    await expect(page.locator("text=✓ Copied!")).toBeVisible({ timeout: 3000 });
   });
 });
 
@@ -500,6 +502,7 @@ test.describe("tribe — ad units", () => {
 test.describe("tribe — accessibility", () => {
   test("manifesto is reachable via the info button", async ({ page }) => {
     await enterInnerCircle(page);
+    await page.locator("[aria-label='More options']").click();
     await page.locator("[aria-label='About this fire']").click();
     await expect(page.locator("[aria-label='Tribe Manifesto']")).toBeVisible({ timeout: 2000 });
   });

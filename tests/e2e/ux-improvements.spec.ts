@@ -259,8 +259,8 @@ test.describe("ux — @mentions", () => {
       .filter({ hasText: tag })
       .last();
     await expect(bubble).toBeVisible({ timeout: 5000 });
-    // The @mention span should be present
-    await expect(bubble.locator("span", { hasText: "@Tester" })).toBeVisible({ timeout: 3000 });
+    // The @mention span should be present (exact match to avoid matching parent spans)
+    await expect(bubble.locator("span").filter({ hasText: /^@Tester$/ })).toBeVisible({ timeout: 3000 });
   });
 });
 
@@ -312,40 +312,23 @@ test.describe("ux — markdown formatting", () => {
 });
 
 // ─── Image lightbox ───────────────────────────────────────────────────────────
+//
+// NOTE: These tests are skipped because injecting raw DOM elements bypasses
+// React's synthetic event system — onClick on non-React nodes never fires.
+// Full lightbox e2e tests require a real Convex storage upload; cover with unit
+// tests or a dedicated mock-backend test environment instead.
 
 test.describe("ux — image lightbox", () => {
+  test.skip(true, "requires Convex storage upload; raw DOM injection bypasses React events");
+
   test("lightbox opens when clicking a message image", async ({ page }) => {
     await enterInnerCircle(page);
-    // Inject a fake image message directly into the DOM for testing
-    // (actual image upload requires Convex storage)
-    await page.evaluate(() => {
-      const feed = document.querySelector("[data-testid='chat-feed']");
-      if (!feed) return;
-      const img = document.createElement("img");
-      img.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-      img.setAttribute("data-testid", "message-image");
-      img.className = "cursor-zoom-in";
-      img.style.width = "50px";
-      img.style.height = "50px";
-      feed.appendChild(img);
-    });
     await page.locator("[data-testid='message-image']").click();
     await expect(page.locator("[data-testid='lightbox-image']")).toBeVisible({ timeout: 3000 });
   });
 
   test("lightbox closes on Escape key", async ({ page }) => {
     await enterInnerCircle(page);
-    await page.evaluate(() => {
-      const feed = document.querySelector("[data-testid='chat-feed']");
-      if (!feed) return;
-      const img = document.createElement("img");
-      img.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-      img.setAttribute("data-testid", "message-image");
-      img.className = "cursor-zoom-in";
-      img.style.width = "50px";
-      img.style.height = "50px";
-      feed.appendChild(img);
-    });
     await page.locator("[data-testid='message-image']").click();
     await expect(page.locator("[data-testid='lightbox-image']")).toBeVisible({ timeout: 3000 });
     await page.keyboard.press("Escape");
@@ -354,17 +337,6 @@ test.describe("ux — image lightbox", () => {
 
   test("lightbox closes on close button click", async ({ page }) => {
     await enterInnerCircle(page);
-    await page.evaluate(() => {
-      const feed = document.querySelector("[data-testid='chat-feed']");
-      if (!feed) return;
-      const img = document.createElement("img");
-      img.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-      img.setAttribute("data-testid", "message-image");
-      img.className = "cursor-zoom-in";
-      img.style.width = "50px";
-      img.style.height = "50px";
-      feed.appendChild(img);
-    });
     await page.locator("[data-testid='message-image']").click();
     await expect(page.locator("[data-testid='lightbox-image']")).toBeVisible({ timeout: 3000 });
     await page.locator("[aria-label='Close image']").click();
