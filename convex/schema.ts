@@ -45,6 +45,7 @@ export default defineSchema({
     warnCount: v.optional(v.number()),
     kickCount: v.optional(v.number()),
     kickedUntil: v.optional(v.number()),
+    kicked: v.optional(v.boolean()),
     banned: v.optional(v.boolean()),
   })
     .index("by_tribeId", ["tribeId"])
