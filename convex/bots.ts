@@ -80,12 +80,14 @@ export const moderateMessage = internalMutation({
     const warnCount = member.warnCount ?? 0;
     const kickCount = member.kickCount ?? 0;
 
-    // Progressive: warn → kick → ban
-    let action: "warn" | "kick" | "ban";
-    if (kickCount >= 1) {
-      action = "ban"; // already been kicked once — next violation = ban
+    // Progressive: warn → mute → kick → ban
+    let action: "warn" | "mute" | "kick" | "ban";
+    if (member.kicked) {
+      action = "ban"; // already been kicked — permanent ban
+    } else if (kickCount >= 1) {
+      action = "kick"; // already been muted once — actual kick from tribe
     } else if (isSpam || warnCount >= 2) {
-      action = "kick";
+      action = "mute"; // temp silence for 5 min
     } else {
       action = "warn";
     }
@@ -100,8 +102,8 @@ export const moderateMessage = internalMutation({
         text:
           `⚠️ @${authorName} — ${hasSwear ? "keep it clean around the fire" : "slow down"}. ` +
           (strikesLeft > 0
-            ? `${strikesLeft} strike${strikesLeft > 1 ? "s" : ""} left before you're kicked.`
-            : `Next violation and you're out.`),
+            ? `${strikesLeft} strike${strikesLeft > 1 ? "s" : ""} left before you're muted.`
+            : `Next violation and you're muted.`),
         author: BOT_BOUNCER.name,
         authorId: BOT_BOUNCER.id,
         timestamp: now,
@@ -117,7 +119,7 @@ export const moderateMessage = internalMutation({
         avatarSeed: BOT_LEADER.avatarSeed,
         likes: [],
       });
-    } else if (action === "kick") {
+    } else if (action === "mute") {
       const kickedUntil = now + 5 * 60 * 1000;
       await ctx.db.patch(member._id, { kickCount: kickCount + 1, kickedUntil });
       // Delete the offending recent messages (last 30 seconds)
@@ -131,7 +133,27 @@ export const moderateMessage = internalMutation({
       );
       await ctx.db.insert("messages", {
         tribeId,
-        text: `🚫 @${authorName} kicked for ${isSpam ? "spamming" : "repeated violations"}. Come back in 5 minutes — if you can behave.`,
+        text: `🔇 @${authorName} muted for 5 minutes for ${isSpam ? "spamming" : "repeated violations"}. Come back when you've cooled off.`,
+        author: BOT_BOUNCER.name,
+        authorId: BOT_BOUNCER.id,
+        timestamp: now,
+        avatarSeed: BOT_BOUNCER.avatarSeed,
+        likes: [],
+      });
+    } else if (action === "kick") {
+      await ctx.db.patch(member._id, { kicked: true });
+      // Erase their recent messages (last 5 min)
+      await Promise.all(
+        recentMsgs
+          .filter((m) => m.authorId === authorId)
+          .map(async (m) => {
+            if (m.storageId) await ctx.storage.delete(m.storageId);
+            await ctx.db.delete(m._id);
+          })
+      );
+      await ctx.db.insert("messages", {
+        tribeId,
+        text: `🚫 @${authorName} has been kicked from the campfire for repeated violations. The fire is better without them.`,
         author: BOT_BOUNCER.name,
         authorId: BOT_BOUNCER.id,
         timestamp: now,

@@ -41,10 +41,12 @@ export const listTyping = query({
     const cutoff = Date.now() - TYPING_TTL_MS;
     const rows = await ctx.db
       .query("typing")
-      .withIndex("by_tribeId", (q) => q.eq("tribeId", args.tribeId))
+      .withIndex("by_tribeId_and_updatedAt", (q) =>
+        q.eq("tribeId", args.tribeId).gt("updatedAt", cutoff)
+      )
       .take(20);
     return rows
-      .filter((r) => r.userId !== args.excludeUserId && r.updatedAt > cutoff)
+      .filter((r) => r.userId !== args.excludeUserId)
       .map((r) => r.userName);
   },
 });

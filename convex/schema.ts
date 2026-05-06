@@ -18,7 +18,8 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_tribeId", ["tribeId"])
-    .index("by_tribeId_and_userId", ["tribeId", "userId"]),
+    .index("by_tribeId_and_userId", ["tribeId", "userId"])
+    .index("by_tribeId_and_updatedAt", ["tribeId", "updatedAt"]),
 
   messages: defineTable({
     tribeId: v.id("tribes"),
@@ -45,6 +46,7 @@ export default defineSchema({
     warnCount: v.optional(v.number()),
     kickCount: v.optional(v.number()),
     kickedUntil: v.optional(v.number()),
+    kicked: v.optional(v.boolean()),
     banned: v.optional(v.boolean()),
   })
     .index("by_tribeId", ["tribeId"])

@@ -42,16 +42,41 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
   const sendMutation = useMutation(api.messages.send);
   const toggleLikeMutation = useMutation(api.messages.toggleLike);
   const deleteMessageMutation = useMutation(api.messages.deleteMessage);
+  const joinTribeMutation = useMutation(api.members.joinTribe);
 
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [showNearby, setShowNearby] = useState(false);
   const [showManifesto, setShowManifesto] = useState(false);
   const [showNamePicker, setShowNamePicker] = useState(!identity.nameChosen);
+  const hasJoinedRef = useRef(false);
 
   const messages = (rawMessages ?? []) as unknown as Message[];
   const openThreadMessage = openThreadId
     ? messages.find((m) => m._id === openThreadId) ?? null
     : null;
+
+  // Register with the tribe and trigger the leader greeting as soon as the user has a name.
+  useEffect(() => {
+    if (!identity.nameChosen || hasJoinedRef.current) return;
+    hasJoinedRef.current = true;
+    void joinTribeMutation({
+      tribeId,
+      userId: identity.userId,
+      userName: identity.tribeName,
+      avatarSeed: identity.avatarSeed,
+    });
+  }, [identity.nameChosen, identity.userId, identity.tribeName, identity.avatarSeed, tribeId, joinTribeMutation]);
+
+  const currentMember = (members ?? []).find((m) => m.userId === identity.userId);
+  const mutedUntil = currentMember?.kickedUntil;
+  const isKicked = currentMember?.kicked === true;
+
+  // Auto-dismiss the kicked overlay to landing after 4 seconds.
+  useEffect(() => {
+    if (!isKicked) return;
+    const t = setTimeout(onLeave, 4000);
+    return () => clearTimeout(t);
+  }, [isKicked, onLeave]);
 
   // Nearby campfires (excluding current, within 50km)
   const nearbyOthers = useMemo(() => {
@@ -88,6 +113,8 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
     onJoinOther(t);
   };
 
+  const activeMembers = (members ?? []).filter((m) => !m.kicked && !m.banned);
+
   return (
     <>
       <TribeHeader
@@ -101,7 +128,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
         onShowManifesto={() => setShowManifesto(true)}
       />
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        <MemberList members={members ?? []} currentUserId={identity.userId} />
+        <MemberList members={activeMembers} currentUserId={identity.userId} />
         <ChatFeed
           messages={messages}
           currentUserId={identity.userId}
@@ -117,7 +144,41 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
         tribeName={identity.tribeName}
         tribeId={tribeId}
         userId={identity.userId}
+        mutedUntil={mutedUntil}
       />
+
+      {/* Kicked overlay */}
+      <AnimatePresence>
+        {isKicked && (
+          <motion.div
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm px-8 text-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="text-5xl mb-4"
+              animate={{ x: [0, 10, -10, 6, -4, 0] }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              🚫🔥
+            </motion.div>
+            <h2 className="font-mono text-lg font-bold text-white mb-2">Kicked from the fire</h2>
+            <p className="font-mono text-sm text-fire-char/60 mb-1">
+              The bouncer showed you the door from{" "}
+              <span className="text-fire-glow font-bold">{tribe.name}</span>.
+            </p>
+            <p className="font-mono text-xs text-fire-char/40 mb-6">Heading back to landing…</p>
+            <motion.button
+              onClick={onLeave}
+              whileTap={{ scale: 0.96 }}
+              className="px-6 py-3 rounded-xl border border-fire-char/30 font-mono text-sm text-fire-char/60 hover:border-fire-ember/40 hover:text-white transition-all"
+            >
+              ← Back now
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Username picker — shown for new users who haven't chosen a name yet */}
       <AnimatePresence>

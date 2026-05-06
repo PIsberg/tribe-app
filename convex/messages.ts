@@ -75,10 +75,13 @@ export const send = mutation({
     if (member?.banned) {
       throw new ConvexError("You have been permanently banned from this campfire. 🔨");
     }
+    if (member?.kicked) {
+      throw new ConvexError("You've been kicked from this campfire. 🚫");
+    }
     if (member?.kickedUntil && member.kickedUntil > Date.now()) {
       const remaining = Math.ceil((member.kickedUntil - Date.now()) / 60_000);
       throw new ConvexError(
-        `Kicked. You can try again in ${remaining} minute${remaining !== 1 ? "s" : ""}. 🚫`
+        `Muted. You can try again in ${remaining} minute${remaining !== 1 ? "s" : ""}. 🔇`
       );
     }
 
@@ -97,7 +100,7 @@ export const send = mutation({
     }
     await ctx.db.patch(args.tribeId, { lastMessageAt: Date.now() });
 
-    // Register member + schedule welcome on first top-level message
+    // Register member as fallback if joinTribe was never called
     if (!parentId) {
       if (!member) {
         await ctx.db.insert("tribeMembers", {
@@ -107,14 +110,6 @@ export const send = mutation({
           avatarSeed: args.avatarSeed,
           joinedAt: Date.now(),
         });
-        const tribe = await ctx.db.get(args.tribeId);
-        if (tribe) {
-          await ctx.scheduler.runAfter(1500, internal.bots.welcomeUser, {
-            tribeId: args.tribeId,
-            userName: args.author,
-            tribeName: tribe.name,
-          });
-        }
       }
 
       // Schedule moderation check for every top-level message
