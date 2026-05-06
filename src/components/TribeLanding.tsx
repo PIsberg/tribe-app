@@ -170,7 +170,7 @@ export function TribeLanding({ geo, tribes, onJoin, onCreate }: Props) {
         </AnimatePresence>
 
         {/* Nearby tribes + map toggle */}
-        {hasLocation && !showForm && geo.coords && (
+        {hasLocation && !showForm && !pendingJoin && geo.coords && (
           <>
             <AnimatePresence mode="wait">
               {showMap ? (
