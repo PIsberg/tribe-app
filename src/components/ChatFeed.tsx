@@ -11,15 +11,19 @@ interface Props {
 }
 
 const AD_INTERVAL = 7;
+const SCROLL_THRESHOLD = 120;
 
 export function ChatFeed({ messages, currentUserId, onLike, onThreadReply }: Props) {
+  const feedRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Only show top-level messages (no parentId) in the main feed
   const topLevel = messages.filter((m) => !m.parentId);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = feedRef.current;
+    const atBottom = !el || el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_THRESHOLD;
+    if (atBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [topLevel.length]);
 
   if (topLevel.length === 0) {
@@ -56,6 +60,7 @@ export function ChatFeed({ messages, currentUserId, onLike, onThreadReply }: Pro
 
   return (
     <div
+      ref={feedRef}
       className="flex-1 flex flex-col overflow-y-auto px-1 py-2 overscroll-contain"
       data-testid="chat-feed"
     >

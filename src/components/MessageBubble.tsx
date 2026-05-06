@@ -87,7 +87,6 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
 
   return (
     <motion.div
-      layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: heat === "cold" ? 0.5 : 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
