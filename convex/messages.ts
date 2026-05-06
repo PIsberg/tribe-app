@@ -1,5 +1,6 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 const THIRTY_MINUTES = 30 * 60 * 1000;
 
@@ -62,6 +63,25 @@ export const send = mutation({
   },
   handler: async (ctx, args) => {
     const { parentId, storageId, ...rest } = args;
+
+    // Enforcement: check ban / temp-kick before inserting anything
+    const member = await ctx.db
+      .query("tribeMembers")
+      .withIndex("by_tribeId_and_userId", (q) =>
+        q.eq("tribeId", args.tribeId).eq("userId", args.authorId)
+      )
+      .first();
+
+    if (member?.banned) {
+      throw new ConvexError("You have been permanently banned from this campfire. 🔨");
+    }
+    if (member?.kickedUntil && member.kickedUntil > Date.now()) {
+      const remaining = Math.ceil((member.kickedUntil - Date.now()) / 60_000);
+      throw new ConvexError(
+        `Kicked. You can try again in ${remaining} minute${remaining !== 1 ? "s" : ""}. 🚫`
+      );
+    }
+
     const id = await ctx.db.insert("messages", {
       ...rest,
       timestamp: Date.now(),
@@ -76,6 +96,36 @@ export const send = mutation({
       }
     }
     await ctx.db.patch(args.tribeId, { lastMessageAt: Date.now() });
+
+    // Register member + schedule welcome on first top-level message
+    if (!parentId) {
+      if (!member) {
+        await ctx.db.insert("tribeMembers", {
+          tribeId: args.tribeId,
+          userId: args.authorId,
+          userName: args.author,
+          avatarSeed: args.avatarSeed,
+          joinedAt: Date.now(),
+        });
+        const tribe = await ctx.db.get(args.tribeId);
+        if (tribe) {
+          await ctx.scheduler.runAfter(1500, internal.bots.welcomeUser, {
+            tribeId: args.tribeId,
+            userName: args.author,
+            tribeName: tribe.name,
+          });
+        }
+      }
+
+      // Schedule moderation check for every top-level message
+      await ctx.scheduler.runAfter(0, internal.bots.moderateMessage, {
+        tribeId: args.tribeId,
+        authorId: args.authorId,
+        authorName: args.author,
+        text: args.text,
+      });
+    }
+
     return id;
   },
 });

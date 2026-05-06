@@ -1,8 +1,16 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useCallback, useEffect, type FormEvent, type KeyboardEvent } from "react";
 import { useMutation } from "convex/react";
+import { ConvexError } from "convex/values";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+
+function extractError(err: unknown): string {
+  if (err instanceof ConvexError) {
+    return typeof err.data === "string" ? err.data : "Action blocked.";
+  }
+  return err instanceof Error ? err.message : "Failed to send";
+}
 
 interface Props {
   onSend: (text: string, storageId?: Id<"_storage">) => void;
@@ -65,11 +73,11 @@ export function MessageInput({ onSend, disabled, tribeName, tribeId, userId }: P
       inputRef.current?.focus();
       if (sendResult && typeof (sendResult as Promise<unknown>).then === "function") {
         (sendResult as Promise<unknown>).catch((err: unknown) => {
-          setError(err instanceof Error ? err.message : "Failed to send");
+          setError(extractError(err));
         });
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to send");
+      setError(extractError(e));
     } finally {
       setUploading(false);
     }

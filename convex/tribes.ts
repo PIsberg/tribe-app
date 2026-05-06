@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 const TRIBE_TTL = 24 * 60 * 60 * 1000;
 
@@ -23,7 +24,12 @@ export const create = mutation({
     lng: v.number(),
   },
   handler: async (ctx, args) => {
-    return ctx.db.insert("tribes", { ...args, createdAt: Date.now() });
+    const tribeId = await ctx.db.insert("tribes", { ...args, createdAt: Date.now() });
+    await ctx.scheduler.runAfter(500, internal.bots.greetTribe, {
+      tribeId,
+      tribeName: args.name,
+    });
+    return tribeId;
   },
 });
 
@@ -35,7 +41,16 @@ export const deleteOldTribes = internalMutation({
       .query("tribes")
       .withIndex("by_createdAt", (q) => q.lt("createdAt", cutoff))
       .take(50);
-    await Promise.all(old.map((t) => ctx.db.delete(t._id)));
+    await Promise.all(
+      old.map(async (t) => {
+        const members = await ctx.db
+          .query("tribeMembers")
+          .withIndex("by_tribeId", (q) => q.eq("tribeId", t._id))
+          .collect();
+        await Promise.all(members.map((m) => ctx.db.delete(m._id)));
+        await ctx.db.delete(t._id);
+      })
+    );
     return old.length;
   },
 });

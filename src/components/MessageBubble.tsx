@@ -31,8 +31,8 @@ interface Props {
 
 function getHeat(timestamp: number): "hot" | "warm" | "cold" {
   const age = Date.now() - timestamp;
-  if (age < 2.5 * 60 * 1000) return "hot";
-  if (age < 5 * 60 * 1000) return "warm";
+  if (age < 10 * 60 * 1000) return "hot";
+  if (age < 20 * 60 * 1000) return "warm";
   return "cold";
 }
 

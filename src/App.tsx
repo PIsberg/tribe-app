@@ -13,6 +13,7 @@ import { ThreadPanel } from "./components/ThreadPanel";
 import { NearbyTribes } from "./components/NearbyTribes";
 import { CreateTribeForm } from "./components/CreateTribeForm";
 import { TypingIndicator } from "./components/TypingIndicator";
+import { MemberList } from "./components/MemberList";
 import { useGeolocation } from "./hooks/useGeolocation";
 import { useActiveTribe } from "./hooks/useActiveTribe";
 import { useTribeIdentity } from "./hooks/useTribeIdentity";
@@ -36,6 +37,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
   const identity = useTribeIdentity();
   const tribeId = tribe._id;
   const rawMessages = useQuery(api.messages.list, { tribeId });
+  const members = useQuery(api.members.list, { tribeId });
   const typingUsers = useQuery(api.typing.listTyping, { tribeId, excludeUserId: identity.userId });
   const sendMutation = useMutation(api.messages.send);
   const toggleLikeMutation = useMutation(api.messages.toggleLike);
@@ -98,14 +100,17 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
         onEditName={() => setShowNamePicker(true)}
         onShowManifesto={() => setShowManifesto(true)}
       />
-      <ChatFeed
-        messages={messages}
-        currentUserId={identity.userId}
-        currentUserName={identity.tribeName}
-        onLike={handleLike}
-        onThreadReply={(id) => setOpenThreadId(id)}
-        onDeleteMessage={handleDelete}
-      />
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <MemberList members={members ?? []} currentUserId={identity.userId} />
+        <ChatFeed
+          messages={messages}
+          currentUserId={identity.userId}
+          currentUserName={identity.tribeName}
+          onLike={handleLike}
+          onThreadReply={(id) => setOpenThreadId(id)}
+          onDeleteMessage={handleDelete}
+        />
+      </div>
       <TypingIndicator typers={typingUsers ?? []} />
       <MessageInput
         onSend={send}
