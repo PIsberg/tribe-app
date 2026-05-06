@@ -394,10 +394,14 @@ function AppShell() {
     return { status: "ok" };
   }, [activeTribeId, activeTribe, geo.status, geo.coords]);
 
-  // Clear active tribe from state if it expired/disappeared
+  // Clear active tribe from state if it expired/disappeared.
+  // Skip when confirmedTribeId is set — the user just joined and the query
+  // may not have updated yet, so we don't want to clear the fresh join.
   useEffect(() => {
-    if (activeTribeId && tribes.length > 0 && !activeTribe) setActiveTribeId(null);
-  }, [activeTribeId, activeTribe, tribes.length, setActiveTribeId]);
+    if (activeTribeId && !confirmedTribeId && tribes.length > 0 && !activeTribe) {
+      setActiveTribeId(null);
+    }
+  }, [activeTribeId, confirmedTribeId, activeTribe, tribes.length, setActiveTribeId]);
 
   // Sync activeTribeId → URL hash
   useEffect(() => {
