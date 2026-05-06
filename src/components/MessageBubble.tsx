@@ -134,7 +134,7 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
               ? "text-fire-ember opacity-100"
               : hasLikes
               ? "text-fire-glow/90 hover:text-fire-ember opacity-100"
-              : "text-fire-smoke/70 hover:text-fire-ember/80 opacity-0 group-hover:opacity-100"
+              : "text-fire-smoke/30 hover:text-fire-ember/80 group-hover:opacity-100 opacity-30"
           }`}
         >
           <span>{likedByMe ? "🔥" : "🕯️"}</span>
@@ -150,7 +150,7 @@ export function MessageBubble({ message, isOwn, likedByMe, onLike, onThreadReply
             className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-mono transition-all duration-150 ${
               hasReplies
                 ? "text-fire-glow/90 hover:text-fire-glow opacity-100"
-                : "text-fire-smoke/70 hover:text-fire-glow/80 opacity-0 group-hover:opacity-100"
+                : "text-fire-smoke/30 hover:text-fire-glow/80 group-hover:opacity-100 opacity-30"
             }`}
           >
             <span>💬</span>
