@@ -34,6 +34,7 @@ export function ChatFeed({ messages, currentUserId, currentUserName, onLike, onT
     const el = feedRef.current;
     if (el) el.scrollTop = el.scrollHeight;
     setUnreadCount(0);
+    setShowScrollBtn(false);
   }, []);
 
   // Track scroll position to show/hide the button
