@@ -9,8 +9,6 @@ import type { Doc } from "../../convex/_generated/dataModel";
 import type { Coords } from "../hooks/useGeolocation";
 import { haversineDistance, formatDistance, GEOFENCE_RADIUS_M } from "../utils/geo";
 
-type TribeWithCount = Doc<"tribes"> & { memberCount: number };
-
 type Heat = "blazing" | "hot" | "warm" | "cold";
 
 const HEAT_COLOR: Record<Heat, string> = {
