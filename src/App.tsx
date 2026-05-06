@@ -37,6 +37,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
   const rawMessages = useQuery(api.messages.list, { tribeId });
   const sendMutation = useMutation(api.messages.send);
   const toggleLikeMutation = useMutation(api.messages.toggleLike);
+  const deleteMessageMutation = useMutation(api.messages.deleteMessage);
 
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [showNearby, setShowNearby] = useState(false);
@@ -72,6 +73,12 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
       userId: identity.userId,
     });
 
+  const handleDelete = (messageId: string) =>
+    deleteMessageMutation({
+      messageId: messageId as Id<"messages">,
+      userId: identity.userId,
+    });
+
   const handleJoinOther = (t: Tribe) => {
     setShowNearby(false);
     onJoinOther(t);
@@ -94,6 +101,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
         currentUserId={identity.userId}
         onLike={handleLike}
         onThreadReply={(id) => setOpenThreadId(id)}
+        onDeleteMessage={handleDelete}
       />
       <MessageInput onSend={send} tribeName={identity.tribeName} />
 
