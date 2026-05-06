@@ -18,7 +18,8 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_tribeId", ["tribeId"])
-    .index("by_tribeId_and_userId", ["tribeId", "userId"]),
+    .index("by_tribeId_and_userId", ["tribeId", "userId"])
+    .index("by_tribeId_and_updatedAt", ["tribeId", "updatedAt"]),
 
   messages: defineTable({
     tribeId: v.id("tribes"),
