@@ -40,7 +40,7 @@ test.describe("stats page", () => {
 
     await expect(page.getByText("Live now", { exact: false })).toBeVisible();
     await expect(page.getByText("Active fires", { exact: false })).toBeVisible();
-    await expect(page.getByText("Messages", { exact: false })).toBeVisible();
+    await expect(page.getByText("Messages", { exact: true })).toBeVisible();
   });
 
   test("shows secondary stat cards after load", async ({ page }) => {
@@ -82,7 +82,7 @@ test.describe("stats page", () => {
 
     await page.getByText("← back to tribe", { exact: false }).click();
     await expect(page).toHaveURL("/");
-    await expect(page.getByText("tribe", { exact: true })).toBeVisible({ timeout: 5000 });
+    await expect(page.locator("[data-testid='tribe-landing']")).toBeVisible({ timeout: 5000 });
   });
 
   test("direct URL navigation to /stats works", async ({ page }) => {
