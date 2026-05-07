@@ -23,7 +23,7 @@ export default defineConfig({
   ],
   webServer: {
     command: process.env.CI
-      ? "npx serve dist --listen 5173 --no-clipboard"
+      ? "npx serve dist --listen 5173 --no-clipboard --single"
       : "npm run dev",
     url: "http://localhost:5173",
     reuseExistingServer: !process.env.CI,
