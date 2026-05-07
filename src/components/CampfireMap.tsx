@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { MapContainer, TileLayer, Marker, Circle, CircleMarker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -150,7 +151,7 @@ export function CampfireMap({ userCoords, onJoin, onClose }: Props) {
     : { position: "relative" };
   const mapHeight = maximized ? "100dvh" : "340px";
 
-  return (
+  const content = (
     <motion.div
       className={`w-full mt-4 ${maximized ? "" : "rounded-2xl"} overflow-hidden border border-fire-char/20`}
       initial={{ opacity: 0, height: 0 }}
@@ -328,4 +329,9 @@ export function CampfireMap({ userCoords, onJoin, onClose }: Props) {
       )}
     </motion.div>
   );
+
+  // When maximized, portal into <body> to escape any framer-motion transform
+  // ancestors that would otherwise become the containing block for our
+  // position:fixed wrapper and confine it to the parent's width on desktop.
+  return maximized ? createPortal(content, document.body) : content;
 }
