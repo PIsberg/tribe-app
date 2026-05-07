@@ -12,6 +12,7 @@ import { TribeManifesto } from "./components/TribeManifesto";
 import { StatsPage } from "./components/StatsPage";
 import { AdminPage } from "./components/AdminPage";
 import { AdminLogin } from "./components/AdminLogin";
+import { MetricsPage } from "./components/MetricsPage";
 import { useAdmin } from "./hooks/useAdmin";
 import { ThreadPanel } from "./components/ThreadPanel";
 import { NearbyTribes } from "./components/NearbyTribes";
@@ -616,6 +617,15 @@ function AppShell() {
       </div>
     ) : (
       <AdminLogin returnTo="/admin" />
+    );
+  }
+  if (pathname === "/metrics") {
+    return isAdmin ? (
+      <div className="relative flex flex-col min-h-[100dvh] max-w-lg mx-auto w-full">
+        <MetricsPage />
+      </div>
+    ) : (
+      <AdminLogin returnTo="/metrics" />
     );
   }
   return <TribeShell />;

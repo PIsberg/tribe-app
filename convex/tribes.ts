@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { incrementCounter, ensureUser } from "./metrics";
 
 const TRIBE_TTL = 24 * 60 * 60 * 1000;
 
@@ -24,6 +25,8 @@ export const create = mutation({
     lng: v.number(),
   },
   handler: async (ctx, args) => {
+    await incrementCounter(ctx, "tribes_created");
+    await ensureUser(ctx, args.creatorId);
     const tribeId = await ctx.db.insert("tribes", { ...args, createdAt: Date.now() });
     await ctx.scheduler.runAfter(500, internal.bots.greetTribe, {
       tribeId,

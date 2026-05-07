@@ -11,8 +11,10 @@
 import type * as admin from "../admin.js";
 import type * as bots from "../bots.js";
 import type * as crons from "../crons.js";
+import type * as lib_auth from "../lib/auth.js";
 import type * as members from "../members.js";
 import type * as messages from "../messages.js";
+import type * as metrics from "../metrics.js";
 import type * as stats from "../stats.js";
 import type * as tribes from "../tribes.js";
 import type * as typing from "../typing.js";
@@ -27,8 +29,10 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   bots: typeof bots;
   crons: typeof crons;
+  "lib/auth": typeof lib_auth;
   members: typeof members;
   messages: typeof messages;
+  metrics: typeof metrics;
   stats: typeof stats;
   tribes: typeof tribes;
   typing: typeof typing;

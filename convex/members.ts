@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { ensureUser } from "./metrics";
 
 export const list = query({
   args: { tribeId: v.id("tribes") },
@@ -23,6 +24,7 @@ export const joinTribe = mutation({
     if (userName.trim().toLowerCase().startsWith("@tribe-admin")) {
       throw new Error("Reserved name");
     }
+    await ensureUser(ctx, userId);
     const existing = await ctx.db
       .query("tribeMembers")
       .withIndex("by_tribeId_and_userId", (q) =>

@@ -477,6 +477,16 @@ export function AdminPage() {
           📊 Stats
         </button>
         <button
+          onClick={() => {
+            window.history.pushState(null, "", "/metrics");
+            window.dispatchEvent(new PopStateEvent("popstate"));
+          }}
+          className="font-mono text-[10px] uppercase tracking-widest text-fire-char/40 hover:text-fire-glow/70 transition-colors px-2 py-1 rounded-lg border border-fire-char/15 hover:border-fire-char/30"
+          data-testid="admin-metrics-link"
+        >
+          ∑ Metrics
+        </button>
+        <button
           onClick={logout}
           className="font-mono text-[10px] uppercase tracking-widest text-fire-char/40 hover:text-fire-ember transition-colors px-2 py-1 rounded-lg border border-fire-char/15 hover:border-fire-ember/30"
           data-testid="admin-logout-btn"

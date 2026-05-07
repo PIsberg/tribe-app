@@ -1,26 +1,12 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { assertAdmin, getAdminToken, normalize } from "./lib/auth";
+import { ensureUser } from "./metrics";
 
 declare const process: { env: Record<string, string | undefined> };
 
 const ADMIN_NAME = "@Tribe-admin";
 const TRIBE_TTL = 24 * 60 * 60 * 1000;
-
-function normalize(s: string): string {
-  return s.trim().replace(/^['"`]+/, "").replace(/['"`]+$/, "").trim();
-}
-
-function getAdminToken(): string | undefined {
-  const raw = process.env.ADMIN_TOKEN;
-  if (!raw) return undefined;
-  const normalized = normalize(raw);
-  return normalized || undefined;
-}
-
-function assertAdmin(token: string): void {
-  const expected = getAdminToken();
-  if (!expected || normalize(token) !== expected) throw new Error("Unauthorized");
-}
 
 export const verifyToken = mutation({
   args: { token: v.string() },
@@ -96,6 +82,7 @@ export const adminJoinTribe = mutation({
   },
   handler: async (ctx, { token, tribeId, userId, avatarSeed }) => {
     assertAdmin(token);
+    await ensureUser(ctx, userId);
     const existing = await ctx.db
       .query("tribeMembers")
       .withIndex("by_tribeId_and_userId", (q) =>

@@ -161,3 +161,38 @@ test.describe("admin — tribe actions (require an active tribe)", () => {
     await expect(page.getByText("@Tribe-admin", { exact: false })).toBeVisible({ timeout: 5000 });
   });
 });
+
+test.describe("admin — /metrics page", () => {
+  test("unauthenticated /metrics shows admin login", async ({ page }) => {
+    await page.goto("/metrics");
+    await expect(page.locator("[data-testid='admin-password-input']")).toBeVisible({ timeout: 8000 });
+    await expect(page.locator("[data-testid='metrics-page']")).not.toBeVisible();
+  });
+
+  test("renders all three lifetime counter labels", async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto("/metrics");
+    await expect(page.locator("[data-testid='metrics-page']")).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText("Campfires lit ever", { exact: false })).toBeVisible();
+    await expect(page.getByText("Unique users seen", { exact: false })).toBeVisible();
+    await expect(page.getByText("Messages sent ever", { exact: false })).toBeVisible();
+  });
+
+  test("back link navigates to /admin", async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto("/metrics");
+    await expect(page.locator("[data-testid='metrics-page']")).toBeVisible({ timeout: 15000 });
+    await page.locator("[data-testid='metrics-back-btn']").click();
+    await expect(page).toHaveURL("/admin");
+    await expect(page.locator("[data-testid='admin-tribe-list']")).toBeVisible({ timeout: 10000 });
+  });
+
+  test("admin header has Metrics link that navigates to /metrics", async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto("/admin");
+    await expect(page.locator("[data-testid='admin-tribe-list']")).toBeVisible({ timeout: 15000 });
+    await page.locator("[data-testid='admin-metrics-link']").click();
+    await expect(page).toHaveURL("/metrics");
+    await expect(page.locator("[data-testid='metrics-page']")).toBeVisible({ timeout: 10000 });
+  });
+});
