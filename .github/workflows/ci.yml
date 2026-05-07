@@ -128,6 +128,7 @@ jobs:
           CI: true
           VITE_TRIBE_LAT: "51.5074"
           VITE_TRIBE_LNG: "-0.1278"
+          E2E_ADMIN_TOKEN: ${{ secrets.E2E_ADMIN_TOKEN }}
 
       - name: Upload Playwright report
         if: always()
