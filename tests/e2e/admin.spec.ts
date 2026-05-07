@@ -35,12 +35,13 @@ test.describe("admin — authentication", () => {
     await expect(page.getByText("Tribe Admin", { exact: false })).toBeVisible();
   });
 
-  test("logout returns to login form", async ({ page }) => {
+  test("logout returns to landing page", async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto("/admin");
     await waitForAdminTable(page);
     await page.locator("[data-testid='admin-logout-btn']").click();
-    await expect(page.locator("[data-testid='admin-password-input']")).toBeVisible({ timeout: 5000 });
+    await expect(page).toHaveURL("/");
+    await expect(page.locator("[data-testid='tribe-landing']")).toBeVisible({ timeout: 5000 });
   });
 });
 
