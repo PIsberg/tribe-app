@@ -9,6 +9,7 @@ import { TribeLanding } from "./components/TribeLanding";
 import { ChatFeed } from "./components/ChatFeed";
 import { MessageInput } from "./components/MessageInput";
 import { TribeManifesto } from "./components/TribeManifesto";
+import { StatsPage } from "./components/StatsPage";
 import { ThreadPanel } from "./components/ThreadPanel";
 import { NearbyTribes } from "./components/NearbyTribes";
 import { CreateTribeForm } from "./components/CreateTribeForm";
@@ -430,7 +431,7 @@ type GeoGate =
   | { status: "blocked"; tribeName: string; dist: number }
   | { status: "denied"; tribeName: string };
 
-function AppShell() {
+function TribeShell() {
   const { activeTribeId, setActiveTribeId, confirmedTribeId, setConfirmedTribeId } = useActiveTribe();
   const tribesRaw = useQuery(api.tribes.list);
   const tribes = useMemo(() => tribesRaw ?? [], [tribesRaw]);
@@ -574,6 +575,26 @@ function AppShell() {
       {screen === "landing" && <TribeManifesto />}
     </div>
   );
+}
+
+// ─── App shell (route switcher) ──────────────────────────────────────────────
+
+function AppShell() {
+  const [pathname, setPathname] = useState(() => window.location.pathname);
+  useEffect(() => {
+    const onPop = () => setPathname(window.location.pathname);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  if (pathname === "/stats") {
+    return (
+      <div className="relative flex flex-col min-h-[100dvh] max-w-lg mx-auto w-full">
+        <StatsPage />
+      </div>
+    );
+  }
+  return <TribeShell />;
 }
 
 // ─── Root ────────────────────────────────────────────────────────────────────
