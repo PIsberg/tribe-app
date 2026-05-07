@@ -1,19 +1,54 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 
+declare const process: { env: Record<string, string | undefined> };
+
 const ADMIN_NAME = "@Tribe-admin";
 const TRIBE_TTL = 24 * 60 * 60 * 1000;
 
-function assertAdmin(token: string): void {
-  const expected = process.env.ADMIN_TOKEN;
-  if (!expected || token !== expected) throw new Error("Unauthorized");
+function normalize(s: string): string {
+  return s.trim().replace(/^['"`]+/, "").replace(/['"`]+$/, "").trim();
 }
 
-export const verifyToken = query({
+function getAdminToken(): string | undefined {
+  const raw = process.env.ADMIN_TOKEN;
+  if (!raw) return undefined;
+  const normalized = normalize(raw);
+  return normalized || undefined;
+}
+
+function assertAdmin(token: string): void {
+  const expected = getAdminToken();
+  if (!expected || normalize(token) !== expected) throw new Error("Unauthorized");
+}
+
+export const verifyToken = mutation({
   args: { token: v.string() },
   handler: async (_ctx, { token }) => {
-    const expected = process.env.ADMIN_TOKEN;
-    return !!(expected && token === expected);
+    const expected = getAdminToken();
+    return !!(expected && normalize(token) === expected);
+  },
+});
+
+// Temporary diagnostic — returns metadata about ADMIN_TOKEN without leaking
+// the actual value. Safe to call from anywhere. Remove once login works.
+export const debugTokenInfo = mutation({
+  args: { sample: v.string() },
+  handler: async (_ctx, { sample }) => {
+    const raw = process.env.ADMIN_TOKEN;
+    const normalizedExpected = raw ? normalize(raw) : null;
+    const normalizedSample = normalize(sample);
+    const firstCharCode = raw && raw.length > 0 ? raw.charCodeAt(0) : null;
+    const lastCharCode = raw && raw.length > 0 ? raw.charCodeAt(raw.length - 1) : null;
+    return {
+      isSet: !!raw,
+      rawLength: raw?.length ?? 0,
+      normalizedExpectedLength: normalizedExpected?.length ?? 0,
+      normalizedSampleLength: normalizedSample.length,
+      firstCharCode,                  // 39 = ', 34 = ", 96 = `
+      lastCharCode,
+      matches: !!(normalizedExpected && normalizedSample === normalizedExpected),
+    };
   },
 });
 

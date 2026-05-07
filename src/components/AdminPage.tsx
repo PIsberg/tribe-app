@@ -24,6 +24,10 @@ type AdminTribe = {
 type SortKey = "lastActivity" | "createdDesc" | "createdAsc" | "memberCount" | "messageCount";
 type StatusFilter = "all" | "active" | "expired";
 
+// Inline style is the only reliable way to color <option> elements across
+// browsers — Tailwind classes on <option> are ignored on most platforms.
+const OPTION_STYLE: React.CSSProperties = { backgroundColor: "#0a1a0a", color: "#ffffff" };
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function timeAgo(ts: number): string {
@@ -495,23 +499,23 @@ export function AdminPage() {
           value={status}
           onChange={(e) => setStatus(e.target.value as StatusFilter)}
           data-testid="admin-status-filter"
-          className="bg-fire-ash/50 border border-fire-char/25 rounded-lg px-2 py-1.5 font-mono text-xs text-fire-char/70 outline-none focus:border-fire-ember/40 transition-all"
+          className="bg-fire-ash/50 border border-fire-char/25 rounded-lg px-2 py-1.5 font-mono text-xs text-white outline-none focus:border-fire-ember/40 transition-all"
         >
-          <option value="all">All</option>
-          <option value="active">Active</option>
-          <option value="expired">Expired</option>
+          <option value="all" style={OPTION_STYLE}>All</option>
+          <option value="active" style={OPTION_STYLE}>Active</option>
+          <option value="expired" style={OPTION_STYLE}>Expired</option>
         </select>
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value as SortKey)}
           data-testid="admin-sort"
-          className="bg-fire-ash/50 border border-fire-char/25 rounded-lg px-2 py-1.5 font-mono text-xs text-fire-char/70 outline-none focus:border-fire-ember/40 transition-all"
+          className="bg-fire-ash/50 border border-fire-char/25 rounded-lg px-2 py-1.5 font-mono text-xs text-white outline-none focus:border-fire-ember/40 transition-all"
         >
-          <option value="lastActivity">Most active</option>
-          <option value="createdDesc">Newest</option>
-          <option value="createdAsc">Oldest</option>
-          <option value="memberCount">Most members</option>
-          <option value="messageCount">Most messages</option>
+          <option value="lastActivity" style={OPTION_STYLE}>Most active</option>
+          <option value="createdDesc" style={OPTION_STYLE}>Newest</option>
+          <option value="createdAsc" style={OPTION_STYLE}>Oldest</option>
+          <option value="memberCount" style={OPTION_STYLE}>Most members</option>
+          <option value="messageCount" style={OPTION_STYLE}>Most messages</option>
         </select>
       </div>
 

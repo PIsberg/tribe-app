@@ -17,12 +17,17 @@ export function AdminLogin({ returnTo }: Props) {
     if (!pwd.trim() || loading) return;
     setLoading(true);
     setError(false);
-    const ok = await login(pwd.trim());
-    if (ok) {
-      window.history.pushState(null, "", returnTo);
-      window.dispatchEvent(new PopStateEvent("popstate"));
-    } else {
+    try {
+      const ok = await login(pwd.trim());
+      if (ok) {
+        window.history.pushState(null, "", returnTo);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      } else {
+        setError(true);
+      }
+    } catch {
       setError(true);
+    } finally {
       setLoading(false);
     }
   };
