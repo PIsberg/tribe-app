@@ -42,15 +42,13 @@ function MutedBanner({ until }: { until: number }) {
 interface Props {
   onSend: (text: string, storageId?: Id<"_storage">) => void;
   disabled?: boolean;
-  hidden?: boolean;
   tribeName: string;
   tribeId?: Id<"tribes">;
   userId?: string;
   mutedUntil?: number;
 }
 
-export function MessageInput({ onSend, disabled, hidden, tribeName, tribeId, userId, mutedUntil }: Props) {
-  if (hidden) return null;
+export function MessageInput({ onSend, disabled, tribeName, tribeId, userId, mutedUntil }: Props) {
   const [value, setValue] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);

@@ -505,7 +505,7 @@ function TribeShell() {
     const tribeId = nearby[0]._id as string;
     setActiveTribeId(tribeId);
     setConfirmedTribeId(tribeId);
-  }, [geo.status, geo.coords, activeTribeId, tribes, setActiveTribeId, setConfirmedTribeId]);
+  }, [isAdmin, geo.status, geo.coords, activeTribeId, tribes, setActiveTribeId, setConfirmedTribeId]);
 
   const handleJoin = (tribe: Tribe) => {
     const id = tribe._id as string;
