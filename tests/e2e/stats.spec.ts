@@ -1,5 +1,13 @@
 import { test, expect, type Page } from "@playwright/test";
 
+// Inject admin token directly into localStorage (bypasses the login UI)
+async function loginAsAdmin(page: Page) {
+  const token = process.env.E2E_ADMIN_TOKEN ?? "test-admin-token";
+  await page.addInitScript((t) => {
+    localStorage.setItem("tribe:admin-token", t);
+  }, token);
+}
+
 // Wait for the stats page to finish loading (skeleton gone, real data in)
 async function waitForStatsLoaded(page: Page) {
   // The skeleton cards use animate-pulse; real cards have stat labels.
@@ -10,7 +18,14 @@ async function waitForStatsLoaded(page: Page) {
 }
 
 test.describe("stats page", () => {
+  test("unauthenticated /stats shows admin login form", async ({ page }) => {
+    await page.goto("/stats");
+    await expect(page.locator("[data-testid='admin-password-input']")).toBeVisible({ timeout: 8000 });
+    await expect(page.locator("[data-testid='stats-page']")).not.toBeVisible();
+  });
+
   test("loads at /stats and shows hero", async ({ page }) => {
+    await loginAsAdmin(page);
     await page.goto("/stats");
     await expect(page.locator("[data-testid='stats-page']")).toBeVisible({ timeout: 10000 });
     await expect(page.getByText("Tribe Network", { exact: false })).toBeVisible();
@@ -19,6 +34,7 @@ test.describe("stats page", () => {
   });
 
   test("shows all hero stat cards after load", async ({ page }) => {
+    await loginAsAdmin(page);
     await page.goto("/stats");
     await waitForStatsLoaded(page);
 
@@ -28,6 +44,7 @@ test.describe("stats page", () => {
   });
 
   test("shows secondary stat cards after load", async ({ page }) => {
+    await loginAsAdmin(page);
     await page.goto("/stats");
     await waitForStatsLoaded(page);
 
@@ -38,20 +55,20 @@ test.describe("stats page", () => {
   });
 
   test("shows sparkline card after load", async ({ page }) => {
+    await loginAsAdmin(page);
     await page.goto("/stats");
     await waitForStatsLoaded(page);
 
     await expect(page.getByText("Messages · last 60 min", { exact: false })).toBeVisible();
-    // SVG bars are rendered
     await expect(page.locator("svg")).toBeVisible();
   });
 
   test("shows hottest campfires section after load", async ({ page }) => {
+    await loginAsAdmin(page);
     await page.goto("/stats");
     await waitForStatsLoaded(page);
 
     await expect(page.locator("[data-testid='stats-hottest-header']")).toBeVisible();
-    // Either a list of tribes or the empty-state message
     const hasTribes = await page.locator("text=#1").isVisible().catch(() => false);
     if (!hasTribes) {
       await expect(page.getByText("No fires lit yet", { exact: false })).toBeVisible();
@@ -59,23 +76,24 @@ test.describe("stats page", () => {
   });
 
   test("back link navigates to landing", async ({ page }) => {
+    await loginAsAdmin(page);
     await page.goto("/stats");
     await waitForStatsLoaded(page);
 
     await page.getByText("← back to tribe", { exact: false }).click();
     await expect(page).toHaveURL("/");
-    // Landing page shows the tribe logo
     await expect(page.getByText("tribe", { exact: true })).toBeVisible({ timeout: 5000 });
   });
 
   test("direct URL navigation to /stats works", async ({ page }) => {
-    // Navigate away first, then deep-link in
+    await loginAsAdmin(page);
     await page.goto("/");
     await page.goto("/stats");
     await expect(page.locator("[data-testid='stats-page']")).toBeVisible({ timeout: 10000 });
   });
 
   test("browser back button returns from /stats to landing", async ({ page }) => {
+    await loginAsAdmin(page);
     await page.goto("/");
     await page.goto("/stats");
     await expect(page.locator("[data-testid='stats-page']")).toBeVisible({ timeout: 10000 });
@@ -85,10 +103,10 @@ test.describe("stats page", () => {
   });
 
   test("stat values are non-negative numbers or capped labels", async ({ page }) => {
+    await loginAsAdmin(page);
     await page.goto("/stats");
     await waitForStatsLoaded(page);
 
-    // Each hero card contains a number or a capped label like "10k+"
     const numberPattern = /^(\d+(\.\d+)?k?\+?|10k\+)$/;
     const heroCards = page.locator("[data-testid='stats-page'] .tabular-nums");
     const count = await heroCards.count();
@@ -105,6 +123,7 @@ test.describe("stats page — mobile", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
   test("renders correctly on mobile viewport", async ({ page }) => {
+    await loginAsAdmin(page);
     await page.goto("/stats");
     await waitForStatsLoaded(page);
 

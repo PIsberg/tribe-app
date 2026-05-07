@@ -72,6 +72,13 @@ export const send = mutation({
       )
       .first();
 
+    if (
+      args.author.trim().toLowerCase().startsWith("@tribe-admin") &&
+      member?.userName !== "@Tribe-admin"
+    ) {
+      throw new ConvexError("Reserved name.");
+    }
+
     if (member?.banned) {
       throw new ConvexError("You have been permanently banned from this campfire. 🔨");
     }

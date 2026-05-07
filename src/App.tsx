@@ -10,6 +10,9 @@ import { ChatFeed } from "./components/ChatFeed";
 import { MessageInput } from "./components/MessageInput";
 import { TribeManifesto } from "./components/TribeManifesto";
 import { StatsPage } from "./components/StatsPage";
+import { AdminPage } from "./components/AdminPage";
+import { AdminLogin } from "./components/AdminLogin";
+import { useAdmin } from "./hooks/useAdmin";
 import { ThreadPanel } from "./components/ThreadPanel";
 import { NearbyTribes } from "./components/NearbyTribes";
 import { CreateTribeForm } from "./components/CreateTribeForm";
@@ -32,9 +35,10 @@ interface InnerCircleProps {
   geo: GeoState;
   onLeave: () => void;
   onJoinOther: (tribe: Tribe) => void;
+  isAdmin?: boolean;
 }
 
-function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircleProps) {
+function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = false }: InnerCircleProps) {
   const identity = useTribeIdentity();
   const tribeId = tribe._id;
   const rawMessages = useQuery(api.messages.list, { tribeId });
@@ -55,15 +59,16 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther }: InnerCircl
     : null;
 
   // Register with the tribe (or update name) whenever identity changes.
+  // Admin skips this — their member row is created by admin.adminJoinTribe.
   useEffect(() => {
-    if (!identity.nameChosen) return;
+    if (!identity.nameChosen || isAdmin) return;
     void joinTribeMutation({
       tribeId,
       userId: identity.userId,
       userName: identity.tribeName,
       avatarSeed: identity.avatarSeed,
     });
-  }, [identity.nameChosen, identity.userId, identity.tribeName, identity.avatarSeed, tribeId, joinTribeMutation]);
+  }, [identity.nameChosen, identity.userId, identity.tribeName, identity.avatarSeed, tribeId, joinTribeMutation, isAdmin]);
 
   const currentMember = (members ?? []).find((m) => m.userId === identity.userId);
   const mutedUntil = currentMember?.kickedUntil;
@@ -432,6 +437,7 @@ type GeoGate =
   | { status: "denied"; tribeName: string };
 
 function TribeShell() {
+  const { isAdmin } = useAdmin();
   const { activeTribeId, setActiveTribeId, confirmedTribeId, setConfirmedTribeId } = useActiveTribe();
   const tribesRaw = useQuery(api.tribes.list);
   const tribes = useMemo(() => tribesRaw ?? [], [tribesRaw]);
@@ -445,13 +451,14 @@ function TribeShell() {
   // Derives gate status purely from current coords — no effect or extra state needed.
   // Re-evaluates on every watchPosition update, providing continuous monitoring for kicks too.
   const geoGate = useMemo<GeoGate>(() => {
+    if (isAdmin) return { status: "ok" }; // admin bypasses geofence
     if (!activeTribeId || !activeTribe) return { status: "ok" };
     if (geo.status === "denied" || geo.status === "unsupported" || geo.status === "error") return { status: "denied", tribeName: activeTribe.name };
     if (geo.status !== "granted" || !geo.coords) return { status: "checking" };
     const dist = haversineDistance(geo.coords.lat, geo.coords.lng, activeTribe.lat, activeTribe.lng);
     if (dist > GEOFENCE_RADIUS_M) return { status: "blocked", tribeName: activeTribe.name, dist };
     return { status: "ok" };
-  }, [activeTribeId, activeTribe, geo.status, geo.coords]);
+  }, [isAdmin, activeTribeId, activeTribe, geo.status, geo.coords]);
 
   // Clear active tribe from state if it expired/disappeared.
   // Skip when confirmedTribeId is set — the user just joined and the query
@@ -487,7 +494,7 @@ function TribeShell() {
 
   // Auto-join the most active tribe inside the geofence on first load.
   useEffect(() => {
-    if (autoJoinedRef.current || activeTribeId || geo.status !== "granted" || !geo.coords) return;
+    if (isAdmin || autoJoinedRef.current || activeTribeId || geo.status !== "granted" || !geo.coords) return;
     const { lat, lng } = geo.coords;
     const nearby = tribes
       .filter((t) => haversineDistance(lat, lng, t.lat, t.lng) <= GEOFENCE_RADIUS_M)
@@ -511,7 +518,11 @@ function TribeShell() {
   const handleLeave = useCallback(() => {
     setActiveTribeId(null);
     setConfirmedTribeId(null);
-  }, [setActiveTribeId, setConfirmedTribeId]);
+    if (isAdmin) {
+      window.history.pushState(null, "", "/admin");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }
+  }, [setActiveTribeId, setConfirmedTribeId, isAdmin]);
   const handleJoinOther = (tribe: Tribe) => {
     const id = tribe._id as string;
     setActiveTribeId(id);
@@ -568,6 +579,7 @@ function TribeShell() {
               geo={geo}
               onLeave={handleLeave}
               onJoinOther={handleJoinOther}
+              isAdmin={isAdmin}
             />
           </div>
         )}
@@ -581,6 +593,7 @@ function TribeShell() {
 
 function AppShell() {
   const [pathname, setPathname] = useState(() => window.location.pathname);
+  const { isAdmin } = useAdmin();
   useEffect(() => {
     const onPop = () => setPathname(window.location.pathname);
     window.addEventListener("popstate", onPop);
@@ -588,10 +601,21 @@ function AppShell() {
   }, []);
 
   if (pathname === "/stats") {
-    return (
+    return isAdmin ? (
       <div className="relative flex flex-col min-h-[100dvh] max-w-lg mx-auto w-full">
         <StatsPage />
       </div>
+    ) : (
+      <AdminLogin returnTo="/stats" />
+    );
+  }
+  if (pathname === "/admin") {
+    return isAdmin ? (
+      <div className="relative flex flex-col min-h-[100dvh] max-w-lg mx-auto w-full">
+        <AdminPage />
+      </div>
+    ) : (
+      <AdminLogin returnTo="/admin" />
     );
   }
   return <TribeShell />;

@@ -20,6 +20,9 @@ export const joinTribe = mutation({
     avatarSeed: v.string(),
   },
   handler: async (ctx, { tribeId, userId, userName, avatarSeed }) => {
+    if (userName.trim().toLowerCase().startsWith("@tribe-admin")) {
+      throw new Error("Reserved name");
+    }
     const existing = await ctx.db
       .query("tribeMembers")
       .withIndex("by_tribeId_and_userId", (q) =>
