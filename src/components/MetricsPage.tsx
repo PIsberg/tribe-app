@@ -2,6 +2,7 @@ import { useQuery } from "convex/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../../convex/_generated/api";
 import { useAdmin } from "../hooks/useAdmin";
+import { TribeAd } from "./TribeAd";
 
 function FlipNumber({ value }: { value: number }) {
   const label = value.toLocaleString();
@@ -145,6 +146,9 @@ export function MetricsPage() {
           </>
         )}
       </div>
+
+      {/* Ad unit */}
+      <TribeAd slot={import.meta.env.VITE_ADSENSE_SLOT_METRICS} />
 
       {/* Derived stats */}
       {!loading && (avgMsgsPerUser !== null || avgUsersPerTribe !== null) && (
