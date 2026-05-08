@@ -15,11 +15,17 @@ async function grantOutsideLocation(page: Page) {
 
 // ─── Shared setup helpers ─────────────────────────────────────────────────────
 
+// Per-test unique tester name. Names must be unique within a tribe, so derive
+// from testId + random suffix so concurrent tests and retries don't collide.
+function testerName() {
+  return `Tester-${test.info().testId.slice(0, 6)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 /**
  * Dismiss the username picker modal that appears on first auto-join.
  * The modal is rendered with a "Your name" input in nameOnly mode.
  */
-async function dismissNamePickerIfVisible(page: Page) {
+async function dismissNamePickerIfVisible(page: Page, name = testerName()) {
   const nameInput = page.getByRole("textbox", { name: /your name/i });
   const appeared = await nameInput
     .waitFor({ state: "visible", timeout: 5000 })
@@ -27,10 +33,11 @@ async function dismissNamePickerIfVisible(page: Page) {
     .catch(() => false);
   if (appeared) {
     await nameInput.clear();
-    await nameInput.fill("Tester");
+    await nameInput.fill(name);
     await page.getByRole("button", { name: /join the fire/i }).click();
     await expect(nameInput).not.toBeVisible({ timeout: 5000 });
   }
+  return name;
 }
 
 /**
@@ -39,7 +46,7 @@ async function dismissNamePickerIfVisible(page: Page) {
  * opened while Convex is still returning the tribes list.
  * Also dismisses the username picker that appears on first auto-join entry.
  */
-async function enterInnerCircle(page: Page) {
+async function enterInnerCircle(page: Page, name = testerName()) {
   await grantInsideLocation(page);
   await page.goto("/");
 
@@ -54,7 +61,7 @@ async function enterInnerCircle(page: Page) {
     const createBtn = page.locator("[data-testid='create-tribe-btn']");
     await expect(createBtn).toBeVisible({ timeout: 5000 });
     await createBtn.click();
-    await page.getByRole("textbox", { name: /your name/i }).fill("Tester");
+    await page.getByRole("textbox", { name: /your name/i }).fill(name);
     await page.getByRole("textbox", { name: /tribe name/i }).fill("CI Test Tribe");
     await page.getByRole("button", { name: /light the fire/i }).click();
     await expect(innerCircle).toBeVisible({ timeout: 15000 });
@@ -62,7 +69,8 @@ async function enterInnerCircle(page: Page) {
 
   // Auto-join doesn't set nameChosen, so the username picker modal appears.
   // Creating a tribe does set it, so this is a no-op in that path.
-  await dismissNamePickerIfVisible(page);
+  await dismissNamePickerIfVisible(page, name);
+  return name;
 }
 
 // ─── Landing state ────────────────────────────────────────────────────────────
