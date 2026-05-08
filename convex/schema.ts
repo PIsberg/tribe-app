@@ -51,4 +51,15 @@ export default defineSchema({
   })
     .index("by_tribeId", ["tribeId"])
     .index("by_tribeId_and_userId", ["tribeId", "userId"]),
+
+  counters: defineTable({
+    key: v.string(),
+    shard: v.number(),
+    count: v.number(),
+  }).index("by_key_and_shard", ["key", "shard"]),
+
+  users: defineTable({
+    userId: v.string(),
+    firstSeenAt: v.number(),
+  }).index("by_userId", ["userId"]),
 });

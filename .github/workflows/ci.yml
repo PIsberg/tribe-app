@@ -34,11 +34,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Convex types
-        run: npx convex codegen
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-
       - name: Type check
         run: npm run type-check
 
@@ -66,16 +61,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Convex types
-        run: npx convex codegen
+      - name: Build
+        run: npm run build
         env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-
-      - name: Deploy Convex + Build
-        run: npx convex deploy --cmd 'npm run build'
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-          CONVEX_DEPLOYMENT: ${{ secrets.CONVEX_DEPLOYMENT }}
           VITE_CONVEX_URL: ${{ secrets.VITE_CONVEX_URL }}
           VITE_TRIBE_LAT: ${{ secrets.VITE_TRIBE_LAT }}
           VITE_TRIBE_LNG: ${{ secrets.VITE_TRIBE_LNG }}
@@ -118,11 +106,38 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Download build artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: dist
-          path: dist/
+      # Each CI run gets its own throwaway Convex preview deployment, so tests
+      # don't share a tribe / spam-mute history with prod or other PRs.
+      # Requires repo secret CONVEX_PREVIEW_DEPLOY_KEY (Convex dashboard →
+      # Settings → Preview Deploy Keys).
+      - name: Provision Convex preview deployment & build
+        run: |
+          set -euo pipefail
+          PREVIEW_NAME="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          # The --cmd here writes the preview's URL to $GITHUB_ENV so the
+          # next step can target the same deployment for env-var setup.
+          npx convex deploy \
+            --preview-create "$PREVIEW_NAME" \
+            --cmd 'echo "PREVIEW_CONVEX_URL=$VITE_CONVEX_URL" >> "$GITHUB_ENV" && npm run build' \
+            --cmd-url-env-var-name VITE_CONVEX_URL
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+          VITE_TRIBE_LAT: "51.5074"
+          VITE_TRIBE_LNG: "-0.1278"
+          VITE_ADSENSE_PUB_ID: ${{ secrets.VITE_ADSENSE_PUB_ID }}
+
+      - name: Configure ADMIN_TOKEN on preview
+        run: |
+          set -euo pipefail
+          # Extract deployment name (e.g. joyful-tiger-456) from the URL
+          # https://joyful-tiger-456.<region>.convex.cloud — `convex env set`
+          # otherwise defaults to the personal dev deployment.
+          DEPLOYMENT_NAME=$(printf '%s' "$PREVIEW_CONVEX_URL" | sed -E 's|^https?://([^.]+)\..*|\1|')
+          npx convex env set ADMIN_TOKEN "$E2E_ADMIN_TOKEN" \
+            --deployment "$DEPLOYMENT_NAME"
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+          E2E_ADMIN_TOKEN: ${{ secrets.E2E_ADMIN_TOKEN }}
 
       - name: Run E2E tests
         run: npx playwright test --project=chromium
@@ -130,6 +145,7 @@ jobs:
           CI: true
           VITE_TRIBE_LAT: "51.5074"
           VITE_TRIBE_LNG: "-0.1278"
+          E2E_ADMIN_TOKEN: ${{ secrets.E2E_ADMIN_TOKEN }}
 
       - name: Upload Playwright report
         if: always()
@@ -138,3 +154,38 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 14
+
+      - name: Upload test-results (traces, screenshots)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-test-results
+          path: test-results/
+          retention-days: 14
+
+  deploy:
+    name: Deploy Convex
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, build, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy Convex
+        run: npx convex deploy
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}

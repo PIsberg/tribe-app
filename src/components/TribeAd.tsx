@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 const PUB_ID = import.meta.env.VITE_ADSENSE_PUB_ID ?? "ca-pub-XXXXXXXXXXXXXXXX";
-const IS_REAL_PUB = !PUB_ID.includes("XXXX");
+const IS_LOCAL = import.meta.env.DEV;
 
 interface TribeAdProps {
   slot?: string;
@@ -13,7 +13,7 @@ interface TribeAdProps {
 export function TribeAd({ slot, layoutKey, className = "" }: TribeAdProps) {
   const ref = useRef<HTMLDivElement>(null);
   const hasSlot = typeof slot === "string" && slot.length > 0;
-  const isLive = IS_REAL_PUB && hasSlot;
+  const isLive = !IS_LOCAL && hasSlot;
   const isFluid = typeof layoutKey === "string" && layoutKey.length > 0;
 
   useEffect(() => {
@@ -65,7 +65,7 @@ export function TribeAd({ slot, layoutKey, className = "" }: TribeAdProps) {
           // Placeholder for development / missing slot
           <div className="w-full text-center py-3">
             <p className="font-mono text-xs text-fire-char/60">
-              [ AD PLACEHOLDER — {IS_REAL_PUB ? "missing slot ID" : "configure VITE_ADSENSE_PUB_ID"} ]
+              [ AD PLACEHOLDER — local dev ]
             </p>
             <p className="font-mono text-[10px] text-fire-char/40 mt-1">
               Sponsored Beacon • {PUB_ID}

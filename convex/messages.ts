@@ -1,6 +1,7 @@
 import { v, ConvexError } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { incrementCounter, ensureUser } from "./metrics";
 
 const THIRTY_MINUTES = 30 * 60 * 1000;
 
@@ -72,6 +73,13 @@ export const send = mutation({
       )
       .first();
 
+    if (
+      args.author.trim().toLowerCase().startsWith("@tribe-admin") &&
+      member?.userName !== "@Tribe-admin"
+    ) {
+      throw new ConvexError("Reserved name.");
+    }
+
     if (member?.banned) {
       throw new ConvexError("You have been permanently banned from this campfire. 🔨");
     }
@@ -84,6 +92,9 @@ export const send = mutation({
         `Muted. You can try again in ${remaining} minute${remaining !== 1 ? "s" : ""}. 🔇`
       );
     }
+
+    await incrementCounter(ctx, "messages_sent");
+    await ensureUser(ctx, args.authorId);
 
     const id = await ctx.db.insert("messages", {
       ...rest,

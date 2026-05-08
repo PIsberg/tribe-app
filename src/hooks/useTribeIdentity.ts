@@ -42,6 +42,7 @@ function loadOrCreate(): Stored {
 
 export function useTribeIdentity(): TribeIdentity & { setTribeName: (name: string) => void } {
   const [stored, setStored] = useState<Stored>(loadOrCreate);
+  const isAdmin = !!localStorage.getItem("tribe:admin-token");
 
   const setTribeName = useCallback((name: string) => {
     setStored((prev) => {
@@ -51,5 +52,9 @@ export function useTribeIdentity(): TribeIdentity & { setTribeName: (name: strin
     });
   }, []);
 
-  return { ...stored, avatarUrl: avatarDataUrl(stored.avatarSeed), setTribeName };
+  const effective: Stored = isAdmin
+    ? { ...stored, tribeName: "@Tribe-admin", nameChosen: true }
+    : stored;
+
+  return { ...effective, avatarUrl: avatarDataUrl(stored.avatarSeed), setTribeName };
 }
