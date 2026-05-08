@@ -45,11 +45,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Convex types
-        run: npx convex codegen
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-
       - name: Build web app
         run: npm run build
         env:
@@ -93,11 +88,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Generate Convex types
-        run: npx convex codegen
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
 
       - name: Build web app
         run: npm run build
