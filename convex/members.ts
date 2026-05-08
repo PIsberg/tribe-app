@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { ensureUser } from "./metrics";
@@ -22,15 +22,21 @@ export const joinTribe = mutation({
   },
   handler: async (ctx, { tribeId, userId, userName, avatarSeed }) => {
     if (userName.trim().toLowerCase().startsWith("@tribe-admin")) {
-      throw new Error("Reserved name");
+      throw new ConvexError("Reserved name");
+    }
+    const normalized = userName.trim().toLowerCase();
+    const tribeMembers = await ctx.db
+      .query("tribeMembers")
+      .withIndex("by_tribeId", (q) => q.eq("tribeId", tribeId))
+      .collect();
+    const collision = tribeMembers.find(
+      (m) => m.userId !== userId && m.userName.trim().toLowerCase() === normalized
+    );
+    if (collision) {
+      throw new ConvexError("That name is already taken in this tribe.");
     }
     await ensureUser(ctx, userId);
-    const existing = await ctx.db
-      .query("tribeMembers")
-      .withIndex("by_tribeId_and_userId", (q) =>
-        q.eq("tribeId", tribeId).eq("userId", userId)
-      )
-      .first();
+    const existing = tribeMembers.find((m) => m.userId === userId);
     if (existing) {
       if (existing.userName !== userName) {
         await ctx.db.patch(existing._id, { userName });

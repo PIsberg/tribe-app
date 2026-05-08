@@ -54,6 +54,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
   const [showNearby, setShowNearby] = useState(false);
   const [showManifesto, setShowManifesto] = useState(false);
   const [showNamePicker, setShowNamePicker] = useState(!identity.nameChosen);
+  const [nameError, setNameError] = useState<string | null>(null);
   const messages = (rawMessages ?? []) as unknown as Message[];
   const openThreadMessage = openThreadId
     ? messages.find((m) => m._id === openThreadId) ?? null
@@ -63,12 +64,24 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
   // Admin skips this — their member row is created by admin.adminJoinTribe.
   useEffect(() => {
     if (!identity.nameChosen || isAdmin) return;
-    void joinTribeMutation({
+    joinTribeMutation({
       tribeId,
       userId: identity.userId,
       userName: identity.tribeName,
       avatarSeed: identity.avatarSeed,
-    });
+    }).then(
+      () => setNameError(null),
+      (err: unknown) => {
+        const msg =
+          err && typeof err === "object" && "data" in err && typeof (err as { data: unknown }).data === "string"
+            ? (err as { data: string }).data
+            : err instanceof Error
+              ? err.message
+              : "Could not join — try a different name.";
+        setNameError(msg);
+        setShowNamePicker(true);
+      }
+    );
   }, [identity.nameChosen, identity.userId, identity.tribeName, identity.avatarSeed, tribeId, joinTribeMutation, isAdmin]);
 
   const currentMember = (members ?? []).find((m) => m.userId === identity.userId);
@@ -205,12 +218,18 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
                 Choose your name for{" "}
                 <span className="text-fire-glow font-bold">{tribe.name}</span>
               </p>
+              {nameError && (
+                <p className="font-mono text-[11px] text-fire-ember mb-2 text-center">
+                  {nameError}
+                </p>
+              )}
               <CreateTribeForm
                 onSubmit={(_tribeName, userName) => {
+                  setNameError(null);
                   identity.setTribeName(userName);
                   setShowNamePicker(false);
                 }}
-                onCancel={identity.nameChosen ? () => setShowNamePicker(false) : undefined}
+                onCancel={identity.nameChosen && !nameError ? () => setShowNamePicker(false) : undefined}
                 defaultUserName={identity.nameChosen ? identity.tribeName : ""}
                 nameOnly
               />

@@ -7,7 +7,13 @@ async function grantInsideLocation(page: Page) {
   await page.context().grantPermissions(["geolocation"]);
 }
 
-async function dismissNamePickerIfVisible(page: Page) {
+// Per-test unique tester name. Names must be unique within a tribe, so derive
+// from testId + random suffix so concurrent tests and retries don't collide.
+function testerName() {
+  return `Tester-${test.info().testId.slice(0, 6)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function dismissNamePickerIfVisible(page: Page, name = testerName()) {
   const nameInput = page.getByRole("textbox", { name: /your name/i });
   const appeared = await nameInput
     .waitFor({ state: "visible", timeout: 5000 })
@@ -15,13 +21,14 @@ async function dismissNamePickerIfVisible(page: Page) {
     .catch(() => false);
   if (appeared) {
     await nameInput.clear();
-    await nameInput.fill("Tester");
+    await nameInput.fill(name);
     await page.getByRole("button", { name: /join the fire/i }).click();
     await expect(nameInput).not.toBeVisible({ timeout: 5000 });
   }
+  return name;
 }
 
-async function enterInnerCircle(page: Page) {
+async function enterInnerCircle(page: Page, name = testerName()) {
   await grantInsideLocation(page);
   await page.goto("/");
 
@@ -35,13 +42,14 @@ async function enterInnerCircle(page: Page) {
     const createBtn = page.locator("[data-testid='create-tribe-btn']");
     await expect(createBtn).toBeVisible({ timeout: 5000 });
     await createBtn.click();
-    await page.getByRole("textbox", { name: /your name/i }).fill("Tester");
+    await page.getByRole("textbox", { name: /your name/i }).fill(name);
     await page.getByRole("textbox", { name: /tribe name/i }).fill("UX Test Tribe");
     await page.getByRole("button", { name: /light the fire/i }).click();
     await expect(innerCircle).toBeVisible({ timeout: 15000 });
   }
 
-  await dismissNamePickerIfVisible(page);
+  await dismissNamePickerIfVisible(page, name);
+  return name;
 }
 
 async function sendMessage(page: Page, text: string) {
@@ -245,14 +253,15 @@ test.describe("ux — delete own message", () => {
 // ─── @mentions ────────────────────────────────────────────────────────────────
 
 test.describe("ux — @mentions", () => {
+  let mentionName = "";
   test.beforeEach(async ({ page }) => {
-    await enterInnerCircle(page);
+    mentionName = await enterInnerCircle(page);
   });
 
   test("@mention in message text is rendered as a highlighted span", async ({ page }) => {
     const tag = `${Date.now()}`;
     const input = page.locator("[aria-label='Message input']");
-    await input.fill(`Hey @Tester check this ${tag}`);
+    await input.fill(`Hey @${mentionName} check this ${tag}`);
     await input.press("Enter");
     const bubble = page
       .locator("[data-testid='message-bubble']")
@@ -260,7 +269,8 @@ test.describe("ux — @mentions", () => {
       .last();
     await expect(bubble).toBeVisible({ timeout: 5000 });
     // The @mention span should be present (exact match to avoid matching parent spans)
-    await expect(bubble.locator("span").filter({ hasText: /^@Tester$/ })).toBeVisible({ timeout: 3000 });
+    const mentionPattern = new RegExp(`^@${mentionName}$`);
+    await expect(bubble.locator("span").filter({ hasText: mentionPattern })).toBeVisible({ timeout: 3000 });
   });
 });
 
