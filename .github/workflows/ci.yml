@@ -120,14 +120,15 @@ jobs:
       # don't share a tribe / spam-mute history with prod or other PRs.
       # Requires repo secret CONVEX_PREVIEW_DEPLOY_KEY (Convex dashboard →
       # Settings → Preview Deploy Keys).
-      - name: Provision Convex preview deployment
-        id: convex_preview
+      - name: Provision Convex preview deployment & build
         run: |
           set -euo pipefail
           PREVIEW_NAME="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          # The --cmd here writes the preview's URL to $GITHUB_ENV so the
+          # next step can target the same deployment for env-var setup.
           npx convex deploy \
             --preview-create "$PREVIEW_NAME" \
-            --cmd 'npm run build' \
+            --cmd 'echo "PREVIEW_CONVEX_URL=$VITE_CONVEX_URL" >> "$GITHUB_ENV" && npm run build' \
             --cmd-url-env-var-name VITE_CONVEX_URL
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
@@ -137,7 +138,13 @@ jobs:
 
       - name: Configure ADMIN_TOKEN on preview
         run: |
-          npx convex env set ADMIN_TOKEN "$E2E_ADMIN_TOKEN"
+          set -euo pipefail
+          # Extract deployment name (e.g. joyful-tiger-456) from the URL
+          # https://joyful-tiger-456.<region>.convex.cloud — `convex env set`
+          # otherwise defaults to the personal dev deployment.
+          DEPLOYMENT_NAME=$(printf '%s' "$PREVIEW_CONVEX_URL" | sed -E 's|^https?://([^.]+)\..*|\1|')
+          npx convex env set ADMIN_TOKEN "$E2E_ADMIN_TOKEN" \
+            --deployment "$DEPLOYMENT_NAME"
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
           E2E_ADMIN_TOKEN: ${{ secrets.E2E_ADMIN_TOKEN }}
