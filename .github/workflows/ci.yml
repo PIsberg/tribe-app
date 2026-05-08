@@ -116,11 +116,31 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Download build artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: dist
-          path: dist/
+      # Each CI run gets its own throwaway Convex preview deployment, so tests
+      # don't share a tribe / spam-mute history with prod or other PRs.
+      # Requires repo secret CONVEX_PREVIEW_DEPLOY_KEY (Convex dashboard →
+      # Settings → Preview Deploy Keys).
+      - name: Provision Convex preview deployment
+        id: convex_preview
+        run: |
+          set -euo pipefail
+          PREVIEW_NAME="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          npx convex deploy \
+            --preview-create "$PREVIEW_NAME" \
+            --cmd 'npm run build' \
+            --cmd-url-env-var-name VITE_CONVEX_URL
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+          VITE_TRIBE_LAT: "51.5074"
+          VITE_TRIBE_LNG: "-0.1278"
+          VITE_ADSENSE_PUB_ID: ${{ secrets.VITE_ADSENSE_PUB_ID }}
+
+      - name: Configure ADMIN_TOKEN on preview
+        run: |
+          npx convex env set ADMIN_TOKEN "$E2E_ADMIN_TOKEN"
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+          E2E_ADMIN_TOKEN: ${{ secrets.E2E_ADMIN_TOKEN }}
 
       - name: Run E2E tests
         run: npx playwright test --project=chromium
@@ -136,6 +156,14 @@ jobs:
         with:
           name: playwright-report
           path: playwright-report/
+          retention-days: 14
+
+      - name: Upload test-results (traces, screenshots)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-test-results
+          path: test-results/
           retention-days: 14
 
   deploy:
