@@ -26,6 +26,8 @@ export function TribeAd({ slot, layoutKey, className = "" }: TribeAdProps) {
     }
   }, [isLive]);
 
+  if (!isLive && !IS_LOCAL) return null;
+
   return (
     <div
       className={`my-2 mx-1 rounded-xl border border-fire-ember/40 bg-[#0a1a0a] overflow-hidden ${className}`}

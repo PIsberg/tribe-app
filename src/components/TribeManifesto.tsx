@@ -1,6 +1,6 @@
 import { TribeAd } from "./TribeAd";
 
-export function TribeManifesto() {
+export function TribeManifesto({ showAd = false }: { showAd?: boolean }) {
   return (
     <section
       className="px-6 py-10 mt-8 border-t border-fire-ember/10 max-w-2xl mx-auto text-left"
@@ -45,12 +45,14 @@ export function TribeManifesto() {
         </p>
       </div>
 
-      <div className="mt-8">
-        <TribeAd
-          slot={import.meta.env.VITE_ADSENSE_SLOT_MANIFESTO}
-          layoutKey="-6t+ed+2i-1n-4w"
-        />
-      </div>
+      {showAd && (
+        <div className="mt-8">
+          <TribeAd
+            slot={import.meta.env.VITE_ADSENSE_SLOT_MANIFESTO}
+            layoutKey="-6t+ed+2i-1n-4w"
+          />
+        </div>
+      )}
     </section>
   );
 }
