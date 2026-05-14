@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { MessageBubble, type Message } from "./MessageBubble";
-import { TribeAd } from "./TribeAd";
 
 interface Props {
   messages: Message[];
@@ -12,7 +11,6 @@ interface Props {
   onDeleteMessage?: (messageId: string) => void;
 }
 
-const AD_INTERVAL = 7;
 const SCROLL_THRESHOLD = 120;
 
 export function ChatFeed({ messages, currentUserId, currentUserName, onLike, onThreadReply, onDeleteMessage }: Props) {
@@ -92,7 +90,7 @@ export function ChatFeed({ messages, currentUserId, currentUserName, onLike, onT
   }
 
   const GROUP_GAP_MS = 5 * 60 * 1000;
-  const items: Array<{ type: "message"; data: Message; grouped: boolean } | { type: "ad"; key: string }> = [];
+  const items: Array<{ type: "message"; data: Message; grouped: boolean }> = [];
   topLevel.forEach((msg, i) => {
     const prev = topLevel[i - 1];
     const grouped =
@@ -100,9 +98,6 @@ export function ChatFeed({ messages, currentUserId, currentUserName, onLike, onT
       prev.authorId === msg.authorId &&
       msg.timestamp - prev.timestamp < GROUP_GAP_MS;
     items.push({ type: "message", data: msg, grouped });
-    if ((i + 1) % AD_INTERVAL === 0 && i < topLevel.length - 1) {
-      items.push({ type: "ad", key: `ad-${i}` });
-    }
   });
 
   return (
@@ -115,37 +110,23 @@ export function ChatFeed({ messages, currentUserId, currentUserName, onLike, onT
         <div className="flex-1" />
         <div className="space-y-0.5">
           <AnimatePresence initial={false}>
-            {items.map((item) =>
-              item.type === "ad" ? (
-                <motion.div
-                  key={item.key}
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                >
-                  <TribeAd
-                    slot={import.meta.env.VITE_ADSENSE_SLOT_CHAT}
-                    layoutKey="-gw-3+1f-3d+2z"
-                  />
-                </motion.div>
-              ) : (
-                <MessageBubble
-                  key={item.data._id}
-                  message={item.data}
-                  isOwn={item.data.authorId === currentUserId}
-                  likedByMe={(item.data.likes ?? []).includes(currentUserId)}
-                  onLike={() => onLike(item.data._id)}
-                  onThreadReply={() => onThreadReply(item.data._id)}
-                  onDelete={
-                    onDeleteMessage && item.data.authorId === currentUserId
-                      ? () => onDeleteMessage(item.data._id)
-                      : undefined
-                  }
-                  grouped={item.grouped}
-                  currentUserName={currentUserName}
-                />
-              )
-            )}
+            {items.map((item) => (
+              <MessageBubble
+                key={item.data._id}
+                message={item.data}
+                isOwn={item.data.authorId === currentUserId}
+                likedByMe={(item.data.likes ?? []).includes(currentUserId)}
+                onLike={() => onLike(item.data._id)}
+                onThreadReply={() => onThreadReply(item.data._id)}
+                onDelete={
+                  onDeleteMessage && item.data.authorId === currentUserId
+                    ? () => onDeleteMessage(item.data._id)
+                    : undefined
+                }
+                grouped={item.grouped}
+                currentUserName={currentUserName}
+              />
+            ))}
           </AnimatePresence>
         </div>
         <div ref={bottomRef} />

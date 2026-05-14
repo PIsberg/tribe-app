@@ -487,24 +487,6 @@ test.describe("tribe — auto-kick on geo departure", () => {
   });
 });
 
-// ─── Ad units ────────────────────────────────────────────────────────────────
-
-test.describe("tribe — ad units", () => {
-  test.beforeEach(async ({ page }) => {
-    await enterInnerCircle(page);
-  });
-
-  test("ad placeholder is visible after 7 messages", async ({ page }) => {
-    const input = page.locator("[aria-label='Message input']");
-    for (let i = 1; i <= 8; i++) {
-      await input.fill(`Message number ${i}`);
-      await input.press("Enter");
-      await page.waitForTimeout(80);
-    }
-    await expect(page.locator("text=Signal from the Outside").first()).toBeVisible({ timeout: 15000 });
-  });
-});
-
 // ─── Accessibility ────────────────────────────────────────────────────────────
 
 test.describe("tribe — accessibility", () => {
