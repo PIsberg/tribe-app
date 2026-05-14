@@ -35,6 +35,12 @@ export function ChatFeed({ messages, currentUserId, currentUserName, onLike, onT
     setShowScrollBtn(false);
   }, []);
 
+  // hasMessages gates the scroll listener: when messages first arrive the feed div
+  // enters the DOM, feedRef.current becomes non-null, and this effect re-runs to
+  // attach the listener. Without this dep the effect only ran once on mount (when
+  // the component may still be in the empty state with feedRef.current === null).
+  const hasMessages = topLevel.length > 0;
+
   // Track scroll position to show/hide the button
   useEffect(() => {
     const el = feedRef.current;
@@ -46,7 +52,7 @@ export function ChatFeed({ messages, currentUserId, currentUserName, onLike, onT
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
-  }, [isNearBottom]);
+  }, [hasMessages, isNearBottom]);
 
   // Auto-scroll when new messages arrive. On first load, always land at bottom
   // (standard chat UX); afterwards only auto-scroll if the user is near bottom.

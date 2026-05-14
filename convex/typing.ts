@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 
 const TYPING_TTL_MS = 4000;
 
@@ -32,6 +32,21 @@ export const setTyping = mutation({
         updatedAt: Date.now(),
       });
     }
+  },
+});
+
+// Runs every 2 min via cron to evict rows from disconnected clients that never
+// called setTyping(isTyping: false).
+export const purgeStale = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - 30_000; // stale after 30 s
+    const stale = await ctx.db
+      .query("typing")
+      .withIndex("by_updatedAt", (q) => q.lt("updatedAt", cutoff))
+      .take(500);
+    await Promise.all(stale.map((r) => ctx.db.delete(r._id)));
+    return stale.length;
   },
 });
 

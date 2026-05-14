@@ -17,4 +17,11 @@ crons.interval(
   {}
 );
 
+crons.interval(
+  "purge stale typing rows",
+  { minutes: 2 },
+  internal.typing.purgeStale,
+  {}
+);
+
 export default crons;

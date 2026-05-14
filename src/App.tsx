@@ -460,14 +460,20 @@ type GeoGate =
 function TribeShell() {
   const { isAdmin } = useAdmin();
   const { activeTribeId, setActiveTribeId, confirmedTribeId, setConfirmedTribeId } = useActiveTribe();
-  const tribesRaw = useQuery(api.tribes.list);
-  const tribes = useMemo(() => tribesRaw ?? [], [tribesRaw]);
   const autoJoinedRef = useRef(false);
   const geo = useGeolocation();
-
-  const activeTribe = activeTribeId
-    ? tribes.find((t) => (t._id as string) === activeTribeId) ?? null
-    : null;
+  const tribesRaw = useQuery(
+    api.tribes.listNearby,
+    geo.coords ? { lat: geo.coords.lat, lng: geo.coords.lng } : "skip"
+  );
+  const tribes = useMemo(() => tribesRaw ?? [], [tribesRaw]);
+  // Direct lookup for the active tribe — listNearby may miss tribes outside its 50km radius
+  // (e.g. when accessing via a shared link from a distant location).
+  const activeTribeFromDb = useQuery(
+    api.tribes.getById,
+    activeTribeId ? { id: activeTribeId as Id<"tribes"> } : "skip"
+  );
+  const activeTribe = activeTribeFromDb ?? null;
 
   // Derives gate status purely from current coords — no effect or extra state needed.
   // Re-evaluates on every watchPosition update, providing continuous monitoring for kicks too.
@@ -482,13 +488,12 @@ function TribeShell() {
   }, [isAdmin, activeTribeId, activeTribe, geo.status, geo.coords]);
 
   // Clear active tribe from state if it expired/disappeared.
-  // Skip when confirmedTribeId is set — the user just joined and the query
-  // may not have updated yet, so we don't want to clear the fresh join.
+  // activeTribeFromDb === null (not undefined) means the DB confirmed the tribe is gone.
   useEffect(() => {
-    if (activeTribeId && !confirmedTribeId && tribes.length > 0 && !activeTribe) {
+    if (activeTribeId && !confirmedTribeId && activeTribeFromDb === null) {
       setActiveTribeId(null);
     }
-  }, [activeTribeId, confirmedTribeId, activeTribe, tribes.length, setActiveTribeId]);
+  }, [activeTribeId, confirmedTribeId, activeTribeFromDb, setActiveTribeId]);
 
   // Sync activeTribeId → URL hash
   useEffect(() => {

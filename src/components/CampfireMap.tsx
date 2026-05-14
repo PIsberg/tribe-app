@@ -139,7 +139,7 @@ function Legend() {
 
 export function CampfireMap({ userCoords, onJoin, onClose }: Props) {
   const [maximized, setMaximized] = useState(false);
-  const tribes = useQuery(api.tribes.listWithCounts) ?? [];
+  const tribes = useQuery(api.tribes.listWithCountsNearby, { lat: userCoords.lat, lng: userCoords.lng }) ?? [];
 
   const nearby = tribes
     .map((t) => ({ tribe: t, dist: haversineDistance(userCoords.lat, userCoords.lng, t.lat, t.lng) }))

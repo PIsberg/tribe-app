@@ -9,7 +9,10 @@ export default defineSchema({
     lng: v.number(),
     createdAt: v.number(),
     lastMessageAt: v.optional(v.number()),
-  }).index("by_createdAt", ["createdAt"]),
+    geohash4: v.optional(v.string()),
+  })
+    .index("by_createdAt", ["createdAt"])
+    .index("by_geohash4", ["geohash4"]),
 
   typing: defineTable({
     tribeId: v.id("tribes"),
@@ -19,7 +22,8 @@ export default defineSchema({
   })
     .index("by_tribeId", ["tribeId"])
     .index("by_tribeId_and_userId", ["tribeId", "userId"])
-    .index("by_tribeId_and_updatedAt", ["tribeId", "updatedAt"]),
+    .index("by_tribeId_and_updatedAt", ["tribeId", "updatedAt"])
+    .index("by_updatedAt", ["updatedAt"]),
 
   messages: defineTable({
     tribeId: v.id("tribes"),
@@ -28,14 +32,15 @@ export default defineSchema({
     authorId: v.string(),
     timestamp: v.number(),
     avatarSeed: v.string(),
-    likes: v.array(v.string()),
+    likes: v.optional(v.array(v.string())),
     parentId: v.optional(v.id("messages")),
     replyCount: v.optional(v.number()),
     storageId: v.optional(v.id("_storage")),
   })
     .index("by_tribeId_and_timestamp", ["tribeId", "timestamp"])
     .index("by_timestamp", ["timestamp"])
-    .index("by_parentId_and_timestamp", ["parentId", "timestamp"]),
+    .index("by_parentId_and_timestamp", ["parentId", "timestamp"])
+    .index("by_tribeId_and_authorId", ["tribeId", "authorId"]),
 
   tribeMembers: defineTable({
     tribeId: v.id("tribes"),
@@ -50,7 +55,19 @@ export default defineSchema({
     banned: v.optional(v.boolean()),
   })
     .index("by_tribeId", ["tribeId"])
-    .index("by_tribeId_and_userId", ["tribeId", "userId"]),
+    .index("by_tribeId_and_userId", ["tribeId", "userId"])
+    .index("by_tribeId_and_userName", ["tribeId", "userName"]),
+
+  reactions: defineTable({
+    messageId: v.id("messages"),
+    tribeId: v.optional(v.id("tribes")),
+    userId: v.string(),
+    kind: v.literal("like"),
+    createdAt: v.number(),
+  })
+    .index("by_messageId", ["messageId"])
+    .index("by_messageId_and_userId", ["messageId", "userId"])
+    .index("by_tribeId", ["tribeId"]),
 
   counters: defineTable({
     key: v.string(),
