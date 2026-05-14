@@ -112,6 +112,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
       authorId: identity.userId,
       avatarSeed: identity.avatarSeed,
       ...(storageId ? { storageId } : {}),
+      ...(geo.coords ? { lat: geo.coords.lat, lng: geo.coords.lng } : {}),
     });
 
   const handleLike = (messageId: string) =>

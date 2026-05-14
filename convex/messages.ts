@@ -2,6 +2,8 @@ import { v, ConvexError } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { incrementCounter, ensureUser } from "./metrics";
+import { checkRateLimit } from "./lib/rateLimit";
+import { assertInRadius } from "./lib/geofence";
 
 const THIRTY_MINUTES = 30 * 60 * 1000;
 
@@ -85,8 +87,19 @@ export const listThread = query({
 });
 
 export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    userId: v.string(),
+    tribeId: v.id("tribes"),
+  },
+  handler: async (ctx, args) => {
+    const member = await ctx.db
+      .query("tribeMembers")
+      .withIndex("by_tribeId_and_userId", (q) =>
+        q.eq("tribeId", args.tribeId).eq("userId", args.userId)
+      )
+      .first();
+    if (!member) throw new ConvexError("You must be a tribe member to upload images.");
+    await checkRateLimit(ctx, `upload:${args.userId}`, 5, 60_000);
     return ctx.storage.generateUploadUrl();
   },
 });
@@ -100,9 +113,17 @@ export const send = mutation({
     avatarSeed: v.string(),
     parentId: v.optional(v.id("messages")),
     storageId: v.optional(v.id("_storage")),
+    lat: v.optional(v.number()),
+    lng: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const { parentId, storageId, ...rest } = args;
+    const { parentId, storageId, lat, lng, ...rest } = args;
+
+    const tribe = await ctx.db.get(args.tribeId);
+    if (!tribe) throw new ConvexError("Campfire not found.");
+    assertInRadius(tribe, lat, lng);
+
+    await checkRateLimit(ctx, `send:${args.authorId}:${args.tribeId}`, 30, 60_000);
 
     const member = await ctx.db
       .query("tribeMembers")
@@ -177,6 +198,7 @@ export const toggleLike = mutation({
     userId: v.string(),
   },
   handler: async (ctx, args) => {
+    await checkRateLimit(ctx, `like:${args.userId}`, 60, 60_000);
     const existing = await ctx.db
       .query("reactions")
       .withIndex("by_messageId_and_userId", (q) =>

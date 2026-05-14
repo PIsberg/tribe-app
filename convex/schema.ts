@@ -79,4 +79,10 @@ export default defineSchema({
     userId: v.string(),
     firstSeenAt: v.number(),
   }).index("by_userId", ["userId"]),
+
+  rateLimits: defineTable({
+    key: v.string(),
+    windowStart: v.number(),
+    count: v.number(),
+  }).index("by_key_and_window", ["key", "windowStart"]),
 });

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
+import { checkRateLimit } from "./lib/rateLimit";
 
 const TYPING_TTL_MS = 4000;
 
@@ -11,6 +12,9 @@ export const setTyping = mutation({
     isTyping: v.boolean(),
   },
   handler: async (ctx, args) => {
+    if (args.isTyping) {
+      await checkRateLimit(ctx, `typing:${args.userId}`, 60, 60_000);
+    }
     const existing = await ctx.db
       .query("typing")
       .withIndex("by_tribeId_and_userId", (q) =>

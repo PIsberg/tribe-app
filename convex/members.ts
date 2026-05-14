@@ -2,6 +2,7 @@ import { v, ConvexError } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { ensureUser } from "./metrics";
+import { checkRateLimit } from "./lib/rateLimit";
 
 export const list = query({
   args: { tribeId: v.id("tribes") },
@@ -21,6 +22,7 @@ export const joinTribe = mutation({
     avatarSeed: v.string(),
   },
   handler: async (ctx, { tribeId, userId, userName, avatarSeed }) => {
+    await checkRateLimit(ctx, `join:${userId}`, 10, 60_000);
     if (userName.trim().toLowerCase().startsWith("@tribe-admin")) {
       throw new ConvexError("Reserved name");
     }

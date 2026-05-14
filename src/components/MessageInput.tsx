@@ -58,6 +58,7 @@ export function MessageInput({ onSend, disabled, tribeName, tribeId, userId, mut
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingPingRef = useRef<number>(0);
   const generateUploadUrl = useMutation(api.messages.generateUploadUrl);
   const setTypingMutation = useMutation(api.typing.setTyping);
 
@@ -117,7 +118,7 @@ export function MessageInput({ onSend, disabled, tribeName, tribeId, userId, mut
     try {
       let storageId: Id<"_storage"> | undefined;
       if (imageFile) {
-        const uploadUrl = await generateUploadUrl();
+        const uploadUrl = await generateUploadUrl({ userId: userId!, tribeId: tribeId! });
         const res = await fetch(uploadUrl, {
           method: "POST",
           headers: { "Content-Type": imageFile.type },
@@ -293,7 +294,11 @@ export function MessageInput({ onSend, disabled, tribeName, tribeId, userId, mut
               onChange={(e) => {
                 setValue(e.target.value);
                 if (e.target.value.trim()) {
-                  sendTypingSignal(true);
+                  const now = Date.now();
+                  if (now - lastTypingPingRef.current >= 1000) {
+                    lastTypingPingRef.current = now;
+                    sendTypingSignal(true);
+                  }
                   if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
                   typingTimerRef.current = setTimeout(() => sendTypingSignal(false), 3000);
                 } else {
