@@ -13,6 +13,7 @@ import { StatsPage } from "./components/StatsPage";
 import { AdminPage } from "./components/AdminPage";
 import { AdminLogin } from "./components/AdminLogin";
 import { MetricsPage } from "./components/MetricsPage";
+import { NotFound } from "./components/NotFound";
 import { useAdmin } from "./hooks/useAdmin";
 import { ThreadPanel } from "./components/ThreadPanel";
 import { NearbyTribes } from "./components/NearbyTribes";
@@ -604,7 +605,7 @@ function TribeShell() {
           </div>
         )}
       </AnimatePresence>
-      {screen === "landing" && <TribeManifesto />}
+      {screen === "landing" && <TribeManifesto showAd />}
     </div>
   );
 }
@@ -647,7 +648,8 @@ function AppShell() {
       <AdminLogin returnTo="/metrics" />
     );
   }
-  return <TribeShell />;
+  if (pathname === "/" || pathname === "") return <TribeShell />;
+  return <NotFound />;
 }
 
 // ─── Root ────────────────────────────────────────────────────────────────────

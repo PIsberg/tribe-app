@@ -1,7 +1,6 @@
 import { useQuery } from "convex/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../../convex/_generated/api";
-import { TribeAd } from "./TribeAd";
 
 function timeAgo(ts: number): string {
   const diff = Date.now() - ts;
@@ -290,9 +289,6 @@ export function StatsPage() {
           </>
         )}
       </div>
-
-      {/* Ad unit */}
-      <TribeAd slot={import.meta.env.VITE_ADSENSE_SLOT_STATS} />
 
       {/* Sparkline */}
       {loading ? (
