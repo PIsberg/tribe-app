@@ -23,6 +23,7 @@ import { ConvexHttpClient, ConvexClient } from "convex/browser";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomBytes } from "node:crypto";
 
 // ─── CLI ──────────────────────────────────────────────────────────────────────
 
@@ -64,7 +65,7 @@ function loadEnvUrl() {
 }
 
 function randId(prefix) {
-  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}-${randomBytes(6).toString("base64url")}`;
 }
 
 class Stats {
