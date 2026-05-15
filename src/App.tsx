@@ -23,11 +23,24 @@ import { MemberList } from "./components/MemberList";
 import { useGeolocation } from "./hooks/useGeolocation";
 import { useActiveTribe } from "./hooks/useActiveTribe";
 import { useTribeIdentity } from "./hooks/useTribeIdentity";
+import { usePageActive } from "./hooks/usePageActive";
+import { usePushLatencyTelemetry } from "./hooks/usePushLatencyTelemetry";
 import { haversineDistance, formatDistance, GEOFENCE_RADIUS_M } from "./utils/geo";
 import type { Message } from "./components/MessageBubble";
 import type { GeoState } from "./hooks/useGeolocation";
 
 type Tribe = Doc<"tribes">;
+
+// Returns the most recent non-undefined value of `v`. Used to keep showing
+// the last query snapshot while the subscription is "skip" (tab hidden).
+// Uses the React-blessed "setState-during-render" pattern: when the input
+// goes undefined we keep `cached`; when it produces a fresh value, render
+// is re-run synchronously with the updated cache. No effect, no ref-write.
+function useLastDefined<T>(v: T | undefined): T | undefined {
+  const [cached, setCached] = useState<T | undefined>(v);
+  if (v !== undefined && v !== cached) setCached(v);
+  return v ?? cached;
+}
 
 // ─── Inner circle view ───────────────────────────────────────────────────────
 
@@ -37,26 +50,40 @@ interface InnerCircleProps {
   geo: GeoState;
   onLeave: () => void;
   onJoinOther: (tribe: Tribe) => void;
+  onAutoRedirect: (newTribeId: Id<"tribes">) => void;
   isAdmin?: boolean;
 }
 
-function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = false }: InnerCircleProps) {
+function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, onAutoRedirect, isAdmin = false }: InnerCircleProps) {
   const identity = useTribeIdentity();
   const tribeId = tribe._id;
-  const rawMessages = useQuery(api.messages.list, { tribeId });
-  const likesByMsg = useQuery(api.reactions.likesForTribe, { tribeId });
-  const members = useQuery(api.members.list, { tribeId });
-  const typingUsers = useQuery(api.typing.listTyping, { tribeId, excludeUserId: identity.userId });
+  // Drop reactive subscriptions when the tab has been hidden for 30s+. A
+  // backgrounded user shouldn't pay the per-message fan-out cost in busy
+  // fires; the snapshot rehydrates the moment they come back.
+  const pageActive = usePageActive();
+  const liveMessages = useQuery(api.messages.list, pageActive ? { tribeId } : "skip");
+  const liveLikes = useQuery(api.reactions.likesForTribe, pageActive ? { tribeId } : "skip");
+  const liveMembers = useQuery(api.members.list, pageActive ? { tribeId } : "skip");
+  const typingUsers = useQuery(
+    api.typing.listTyping,
+    pageActive ? { tribeId, excludeUserId: identity.userId } : "skip"
+  );
+  // Preserve last-known snapshots during the hidden→visible transition so
+  // the UI doesn't flash empty between re-subscribe and first frame.
+  const rawMessages = useLastDefined(liveMessages);
+  const likesByMsg = useLastDefined(liveLikes);
+  const members = useLastDefined(liveMembers);
   const sendMutation = useMutation(api.messages.send);
   const toggleLikeMutation = useMutation(api.messages.toggleLike);
   const deleteMessageMutation = useMutation(api.messages.deleteMessage);
-  const joinTribeMutation = useMutation(api.members.joinTribe);
+  const joinOrOverflowMutation = useMutation(api.members.joinOrOverflow);
 
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [showNearby, setShowNearby] = useState(false);
   const [showManifesto, setShowManifesto] = useState(false);
   const [showNamePicker, setShowNamePicker] = useState(!identity.nameChosen);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [fireFull, setFireFull] = useState(false);
   const messages = useMemo(() => {
     const raw = (rawMessages ?? []) as unknown as Message[];
     if (!likesByMsg) return raw.map((m) => ({ ...m, likes: m.likes ?? [] }));
@@ -70,25 +97,37 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
   // Admin skips this — their member row is created by admin.adminJoinTribe.
   useEffect(() => {
     if (!identity.nameChosen || isAdmin) return;
-    joinTribeMutation({
+    joinOrOverflowMutation({
       tribeId,
       userId: identity.userId,
       userName: identity.tribeName,
       avatarSeed: identity.avatarSeed,
     }).then(
-      () => setNameError(null),
+      (result) => {
+        setNameError(null);
+        setFireFull(false);
+        if (result.redirected && result.tribeId !== tribeId) {
+          onAutoRedirect(result.tribeId as Id<"tribes">);
+        }
+      },
       (err: unknown) => {
-        const msg =
+        const data =
           err && typeof err === "object" && "data" in err && typeof (err as { data: unknown }).data === "string"
             ? (err as { data: string }).data
-            : err instanceof Error
-              ? err.message
-              : "Could not join — try a different name.";
+            : null;
+        if (data === "FIRE_FULL") {
+          // Defensive: joinOrOverflow shouldn't throw FIRE_FULL — it creates
+          // overflow tribes — but show the cap UI if something pathological
+          // happens (e.g., all overflows full at exactly the same instant).
+          setFireFull(true);
+          return;
+        }
+        const msg = data ?? (err instanceof Error ? err.message : "Could not join — try a different name.");
         setNameError(msg);
         setShowNamePicker(true);
       }
     );
-  }, [identity.nameChosen, identity.userId, identity.tribeName, identity.avatarSeed, tribeId, joinTribeMutation, isAdmin]);
+  }, [identity.nameChosen, identity.userId, identity.tribeName, identity.avatarSeed, tribeId, joinOrOverflowMutation, isAdmin, onAutoRedirect]);
 
   const currentMember = (members ?? []).find((m) => m.userId === identity.userId);
   const mutedUntil = currentMember?.kickedUntil;
@@ -109,8 +148,9 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
       .filter((t) => haversineDistance(geo.coords!.lat, geo.coords!.lng, t.lat, t.lng) <= 50_000);
   }, [allTribes, tribeId, geo.coords]);
 
-  const send = (text: string, storageId?: Id<"_storage">) =>
-    sendMutation({
+  const trackPushLatency = usePushLatencyTelemetry(tribeId, messages);
+  const send = async (text: string, storageId?: Id<"_storage">) => {
+    const id = await sendMutation({
       tribeId,
       text,
       author: identity.tribeName,
@@ -119,6 +159,9 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
       ...(storageId ? { storageId } : {}),
       ...(geo.coords ? { lat: geo.coords.lat, lng: geo.coords.lng } : {}),
     });
+    if (id) trackPushLatency(id as string);
+    return id;
+  };
 
   const handleLike = (messageId: string) =>
     toggleLikeMutation({
@@ -170,6 +213,45 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
         userId={identity.userId}
         mutedUntil={mutedUntil}
       />
+
+      {/* Fire-at-capacity overlay */}
+      <AnimatePresence>
+        {fireFull && (
+          <motion.div
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm px-8 text-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="text-5xl mb-4">🔥</div>
+            <h2 className="font-mono text-lg font-bold text-white mb-2">This fire is full</h2>
+            <p className="font-mono text-sm text-fire-char/60 mb-1">
+              <span className="text-fire-glow font-bold">{tribe.name}</span> is at capacity.
+            </p>
+            <p className="font-mono text-xs text-fire-char/40 mb-6">
+              Try a nearby fire — or light your own.
+            </p>
+            <div className="flex gap-3">
+              {nearbyOthers.length > 0 && (
+                <motion.button
+                  onClick={() => setShowNearby(true)}
+                  whileTap={{ scale: 0.96 }}
+                  className="px-5 py-2.5 rounded-xl border border-fire-ember/40 font-mono text-sm text-fire-glow hover:bg-fire-ember/10 transition-all"
+                >
+                  Nearby ({nearbyOthers.length})
+                </motion.button>
+              )}
+              <motion.button
+                onClick={onLeave}
+                whileTap={{ scale: 0.96 }}
+                className="px-5 py-2.5 rounded-xl border border-fire-char/30 font-mono text-sm text-fire-char/60 hover:border-fire-ember/40 hover:text-white transition-all"
+              >
+                ← Back
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Kicked overlay */}
       <AnimatePresence>
@@ -611,6 +693,10 @@ function TribeShell() {
               geo={geo}
               onLeave={handleLeave}
               onJoinOther={handleJoinOther}
+              onAutoRedirect={(id) => {
+                setActiveTribeId(id);
+                setConfirmedTribeId(id);
+              }}
               isAdmin={isAdmin}
             />
           </div>

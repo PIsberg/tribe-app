@@ -27,11 +27,11 @@
     "@capacitor/core": "^8.3.1",
     "@capacitor/ios": "^8.3.1",
     "@types/leaflet": "^1.9.21",
-    "convex": "^1.37.0",
+    "convex": "^1.39.1",
     "framer-motion": "^12.38.0",
     "leaflet": "^1.9.4",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
     "react-leaflet": "^5.0.0"
   },
   "devDependencies": {

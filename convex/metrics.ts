@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { assertAdmin } from "./lib/auth";
@@ -85,6 +85,55 @@ export async function ensureUser(ctx: MutationCtx, userId: string): Promise<void
   if (existing) return;
   await ctx.db.insert("users", { userId, firstSeenAt: Date.now() });
   await incrementCounter(ctx, "unique_users");
+}
+
+// ─── Per-tribe push-latency telemetry ────────────────────────────────────────
+//
+// Clients sample (send→onUpdate reflecting that send) and report the latency
+// here. Aggregated into sum + count sharded counters per tribe so the stats
+// page / admin can compute mean push-latency per fire and spot fires that are
+// melting before users complain. Bucketed by 10-min wall-clock window so old
+// samples expire naturally as the tribe's TTL elapses.
+//
+// Cheap, fire-and-forget — no rate limit on this mutation because clients
+// only sample ~1 in every N sends.
+
+function pushLatencyBucket(now: number): number {
+  return Math.floor(now / (10 * 60 * 1000));
+}
+
+export const recordPushLatency = mutation({
+  args: {
+    tribeId: v.id("tribes"),
+    latencyMs: v.number(),
+  },
+  handler: async (ctx, { tribeId, latencyMs }) => {
+    if (!Number.isFinite(latencyMs) || latencyMs < 0 || latencyMs > 60_000) return;
+    const bucket = pushLatencyBucket(Date.now());
+    const sumKey = `push_lat_sum:${tribeId}:${bucket}`;
+    const countKey = `push_lat_n:${tribeId}:${bucket}`;
+    await adjustShardedCounter(ctx, sumKey, Math.round(latencyMs));
+    await adjustShardedCounter(ctx, countKey, 1);
+  },
+});
+
+/** Mean push-latency for a tribe over the most recent N 10-min buckets.
+ *  Returns null if there are no samples in the window. */
+export async function readTribePushLatencyMean(
+  ctx: QueryCtx,
+  tribeId: Id<"tribes">,
+  buckets = 3
+): Promise<{ meanMs: number; samples: number } | null> {
+  const now = Date.now();
+  let totalSum = 0;
+  let totalN = 0;
+  for (let i = 0; i < buckets; i++) {
+    const bucket = pushLatencyBucket(now) - i;
+    totalSum += await readShardedCounter(ctx, `push_lat_sum:${tribeId}:${bucket}`);
+    totalN += await readShardedCounter(ctx, `push_lat_n:${tribeId}:${bucket}`);
+  }
+  if (totalN <= 0) return null;
+  return { meanMs: Math.round(totalSum / totalN), samples: totalN };
 }
 
 export const getLifetimeMetrics = query({
