@@ -23,6 +23,7 @@ import { MemberList } from "./components/MemberList";
 import { useGeolocation } from "./hooks/useGeolocation";
 import { useActiveTribe } from "./hooks/useActiveTribe";
 import { useTribeIdentity } from "./hooks/useTribeIdentity";
+import { usePageActive } from "./hooks/usePageActive";
 import { haversineDistance, formatDistance, GEOFENCE_RADIUS_M } from "./utils/geo";
 import type { Message } from "./components/MessageBubble";
 import type { GeoState } from "./hooks/useGeolocation";
@@ -43,10 +44,25 @@ interface InnerCircleProps {
 function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = false }: InnerCircleProps) {
   const identity = useTribeIdentity();
   const tribeId = tribe._id;
-  const rawMessages = useQuery(api.messages.list, { tribeId });
-  const likesByMsg = useQuery(api.reactions.likesForTribe, { tribeId });
-  const members = useQuery(api.members.list, { tribeId });
-  const typingUsers = useQuery(api.typing.listTyping, { tribeId, excludeUserId: identity.userId });
+  // Drop reactive subscriptions when the tab has been hidden for 30s+. A
+  // backgrounded user shouldn't pay the per-message fan-out cost in busy
+  // fires; the snapshot rehydrates the moment they come back.
+  const pageActive = usePageActive();
+  const liveMessages = useQuery(api.messages.list, pageActive ? { tribeId } : "skip");
+  const liveLikes = useQuery(api.reactions.likesForTribe, pageActive ? { tribeId } : "skip");
+  const liveMembers = useQuery(api.members.list, pageActive ? { tribeId } : "skip");
+  const typingUsers = useQuery(
+    api.typing.listTyping,
+    pageActive ? { tribeId, excludeUserId: identity.userId } : "skip"
+  );
+  // Preserve last-known snapshots during the hidden→visible transition so
+  // the UI doesn't flash empty between re-subscribe and first frame.
+  const [rawMessages, setRawMessages] = useState<typeof liveMessages>(undefined);
+  const [likesByMsg, setLikesByMsg] = useState<typeof liveLikes>(undefined);
+  const [members, setMembers] = useState<typeof liveMembers>(undefined);
+  useEffect(() => { if (liveMessages !== undefined) setRawMessages(liveMessages); }, [liveMessages]);
+  useEffect(() => { if (liveLikes !== undefined) setLikesByMsg(liveLikes); }, [liveLikes]);
+  useEffect(() => { if (liveMembers !== undefined) setMembers(liveMembers); }, [liveMembers]);
   const sendMutation = useMutation(api.messages.send);
   const toggleLikeMutation = useMutation(api.messages.toggleLike);
   const deleteMessageMutation = useMutation(api.messages.deleteMessage);
