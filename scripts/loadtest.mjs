@@ -43,6 +43,14 @@ const RAMP_S = Number(args.ramp ?? 5);
 const URL = args.url ?? loadEnvUrl();
 const MSG_RATE_PER_MIN = Number(args.msgRate ?? 10); // per writer
 const LIKE_RATE_PER_MIN = Number(args.likeRate ?? 20);
+// Coordination flags for multi-process runs of the `fanout` scenario:
+//   --existingTribeId=<id>  join an externally-created tribe instead of creating one
+//   --noWrites              subscribers only; another process handles writes
+//   --emitTribeId           print the created tribeId as a single line for the parent to capture
+const EXISTING_TRIBE_ID = args.existingTribeId ?? null;
+const NO_WRITES = args.noWrites === "true";
+const EMIT_TRIBE_ID = args.emitTribeId === "true";
+const JSON_OUT = args.json === "true";
 
 if (!URL) {
   console.error("Missing Convex URL. Pass --url=... or set VITE_CONVEX_URL in .env.local");
@@ -114,6 +122,11 @@ async function timed(stats, fn) {
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 function printReport(scenario, stats, extras) {
+  if (JSON_OUT) {
+    const summaries = Object.fromEntries(stats.map((s) => [s.label, s.summary()]));
+    console.log("REPORT_JSON:" + JSON.stringify({ scenario, summaries, extras }));
+    return;
+  }
   console.log("\n" + "─".repeat(70));
   console.log(`SCENARIO: ${scenario}`);
   console.log("─".repeat(70));
@@ -235,8 +248,16 @@ async function chatBurst() {
 
 async function fanout() {
   const http = new ConvexHttpClient(URL);
-  const tribe = await createTribe(http, `LT-fanout-${Date.now()}`);
-  console.log(`[fanout] tribe=${tribe.tribeId}, subscribers=${USERS}, writers=${WRITERS}, duration=${DURATION_S}s`);
+  let tribe;
+  if (EXISTING_TRIBE_ID) {
+    const doc = await http.query("tribes:getById", { id: EXISTING_TRIBE_ID });
+    if (!doc) throw new Error(`Tribe ${EXISTING_TRIBE_ID} not found`);
+    tribe = { tribeId: EXISTING_TRIBE_ID, lat: doc.lat, lng: doc.lng };
+  } else {
+    tribe = await createTribe(http, `LT-fanout-${Date.now()}`);
+  }
+  if (EMIT_TRIBE_ID) console.log(`TRIBE_ID:${tribe.tribeId}`);
+  console.log(`[fanout] tribe=${tribe.tribeId}, subscribers=${USERS}, writers=${NO_WRITES ? 0 : WRITERS}, duration=${DURATION_S}s`);
 
   const sendStats = new Stats("send");
   const pushStats = new Stats("push-latency");
@@ -245,7 +266,10 @@ async function fanout() {
   // The "push latency" is when the FASTEST subscriber sees the new doc.
   // (Convex pushes the same patch to all subscribers near-simultaneously, so first-seen
   //  closely approximates server→client time; spread between subscribers is the fan-out cost.)
-  const inflight = new Map(); // text → sendTime
+  // Subscribers parse the embedded sendTime out of the message text
+  // (`fanout|<sendTime>|<seq>|<rand>`). This lets ANY process report
+  // push-latency for messages written by ANY other process — no IPC needed.
+  const FANOUT_TAG = "fanout|";
   const seenPerClient = []; // Set<string>[] — texts each subscriber has reported on
 
   // Spin up subscribers.
@@ -259,11 +283,14 @@ async function fanout() {
       "messages:list",
       { tribeId: tribe.tribeId },
       (msgs) => {
+        const now = Date.now();
         for (const m of msgs) {
+          if (!m.text.startsWith(FANOUT_TAG)) continue;
           if (seen.has(m.text)) continue;
           seen.add(m.text);
-          const sent = inflight.get(m.text);
-          if (sent) pushStats.observe(Date.now() - sent);
+          const parts = m.text.split("|");
+          const sent = Number(parts[1]);
+          if (Number.isFinite(sent)) pushStats.observe(now - sent);
         }
       },
       (err) => pushStats.error(err?.message ?? err)
@@ -276,11 +303,13 @@ async function fanout() {
 
   // Writers send messages at MSG_RATE_PER_MIN each.
   const stopAt = Date.now() + DURATION_S * 1000;
-  const writers = Array.from({ length: WRITERS }, (_, i) => ({
-    userId: randId(`w${i}`),
-    name: `writer_${i}`,
-    avatarSeed: `wseed-${i}`,
-  }));
+  const writers = NO_WRITES
+    ? []
+    : Array.from({ length: WRITERS }, (_, i) => ({
+        userId: randId(`w${i}`),
+        name: `writer_${i}`,
+        avatarSeed: `wseed-${i}`,
+      }));
 
   // Pre-join writers.
   for (const w of writers) {
@@ -293,14 +322,22 @@ async function fanout() {
   }
 
   let sent = 0;
+  if (NO_WRITES) {
+    // Subscriber-only process: stay alive listening for messages from other procs.
+    await sleep(DURATION_S * 1000);
+  }
   await Promise.all(writers.map(async (w, i) => {
     await sleep((i / WRITERS) * RAMP_S * 1000);
     const intervalMs = 60_000 / MSG_RATE_PER_MIN;
     while (Date.now() < stopAt) {
       await sleep(intervalMs * (0.5 + Math.random()));
       if (Date.now() >= stopAt) break;
-      const text = `fanout-${++sent}-${Math.random().toString(36).slice(2, 8)}`;
-      inflight.set(text, Date.now());
+      // Encode the local-clock send time in the text so any subscriber in
+      // any process can compute push-latency on receive. Caveat: assumes
+      // sender and receivers share a clock — true for single-host
+      // multi-proc runs.
+      const now = Date.now();
+      const text = `fanout|${now}|${++sent}|${randomBytes(3).toString("base64url")}`;
       await timed(sendStats, () =>
         http.mutation("messages:send", {
           tribeId: tribe.tribeId,
