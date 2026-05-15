@@ -1,12 +1,16 @@
 import { v, ConvexError } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { incrementCounter, ensureUser } from "./metrics";
+import { incrementCounter, ensureUser, adjustTribeMemberCount } from "./metrics";
 import { checkRateLimit } from "./lib/rateLimit";
 import { assertInRadius } from "./lib/geofence";
+import { touchTribeActivity } from "./lib/tribeActivity";
 
 const THIRTY_MINUTES = 30 * 60 * 1000;
 
+// Likes are fetched via a separate subscription (api.reactions.likesForTribe).
+// Splitting them off means a like no longer invalidates this query for every
+// subscriber, and a message no longer triggers a 10k-reaction scan.
 export const list = query({
   args: { tribeId: v.id("tribes") },
   handler: async (ctx, args) => {
@@ -21,24 +25,9 @@ export const list = query({
       .take(200);
     messages.reverse(); // chronological order for the frontend
 
-    // Single bulk fetch for all tribe reactions — avoids N+1 per message.
-    const allReactions = await ctx.db
-      .query("reactions")
-      .withIndex("by_tribeId", (q) => q.eq("tribeId", args.tribeId))
-      .take(10000);
-    const likesByMsg = new Map<string, string[]>();
-    for (const r of allReactions) {
-      if (r.kind === "like") {
-        const arr = likesByMsg.get(r.messageId as string) ?? [];
-        arr.push(r.userId);
-        likesByMsg.set(r.messageId as string, arr);
-      }
-    }
-
     return Promise.all(
       messages.map(async (m) => ({
         ...m,
-        likes: likesByMsg.get(m._id as string) ?? [],
         imageUrl: m.storageId ? await ctx.storage.getUrl(m.storageId) : null,
       }))
     );
@@ -57,29 +46,9 @@ export const listThread = query({
       .order("asc")
       .take(50);
 
-    if (messages.length === 0) return [];
-
-    // Bulk-fetch reactions for the whole tribe — 1 query instead of N.
-    const parent = await ctx.db.get(args.parentId);
-    const likesByMsg = new Map<string, string[]>();
-    if (parent?.tribeId) {
-      const allReactions = await ctx.db
-        .query("reactions")
-        .withIndex("by_tribeId", (q) => q.eq("tribeId", parent.tribeId))
-        .take(10000);
-      for (const r of allReactions) {
-        if (r.kind === "like") {
-          const arr = likesByMsg.get(r.messageId as string) ?? [];
-          arr.push(r.userId);
-          likesByMsg.set(r.messageId as string, arr);
-        }
-      }
-    }
-
     return Promise.all(
       messages.map(async (m) => ({
         ...m,
-        likes: likesByMsg.get(m._id as string) ?? [],
         imageUrl: m.storageId ? await ctx.storage.getUrl(m.storageId) : null,
       }))
     );
@@ -167,7 +136,7 @@ export const send = mutation({
         await ctx.db.patch(parentId, { replyCount: (parent.replyCount ?? 0) + 1 });
       }
     }
-    await ctx.db.patch(args.tribeId, { lastMessageAt: Date.now() });
+    await touchTribeActivity(ctx, args.tribeId, tribe);
 
     if (!parentId) {
       if (!member) {
@@ -178,6 +147,7 @@ export const send = mutation({
           avatarSeed: args.avatarSeed,
           joinedAt: Date.now(),
         });
+        await adjustTribeMemberCount(ctx, args.tribeId, 1);
       }
 
       await ctx.scheduler.runAfter(0, internal.bots.moderateMessage, {

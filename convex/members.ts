@@ -1,16 +1,20 @@
 import { v, ConvexError } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { ensureUser } from "./metrics";
+import { ensureUser, adjustTribeMemberCount } from "./metrics";
 import { checkRateLimit } from "./lib/rateLimit";
 
+// Bounded at 500 so a long-lived tribe with churn (24h TTL, joiners come and go,
+// kicked/banned rows are kept) can't blow the per-tx read budget. The sidebar
+// only renders active members anyway; the join-collision path already uses
+// take(500) on the same index.
 export const list = query({
   args: { tribeId: v.id("tribes") },
   handler: async (ctx, { tribeId }) => {
     return ctx.db
       .query("tribeMembers")
       .withIndex("by_tribeId", (q) => q.eq("tribeId", tribeId))
-      .collect();
+      .take(500);
   },
 });
 
@@ -59,6 +63,7 @@ export const joinTribe = mutation({
       avatarSeed,
       joinedAt: Date.now(),
     });
+    await adjustTribeMemberCount(ctx, tribeId, 1);
 
     const tribe = await ctx.db.get(tribeId);
     if (tribe) {

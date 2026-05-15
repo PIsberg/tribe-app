@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { adjustTribeMemberCount, tribeMemberActiveDelta } from "./metrics";
+import { touchTribeActivity } from "./lib/tribeActivity";
 
 export const BOT_LEADER = {
   id: "bot_tribe_leader",
@@ -142,7 +144,13 @@ export const moderateMessage = internalMutation({
         likes: [],
       });
     } else if (action === "kick") {
-      await ctx.db.patch(member._id, { kicked: true });
+      const patch = { kicked: true };
+      await ctx.db.patch(member._id, patch);
+      await adjustTribeMemberCount(
+        ctx,
+        tribeId,
+        tribeMemberActiveDelta(member, { ...member, ...patch })
+      );
       // Erase their recent messages (last 5 min)
       await Promise.all(
         recentMsgs
@@ -163,7 +171,13 @@ export const moderateMessage = internalMutation({
       });
     } else {
       // ban — schedule batched deletion to avoid tx-budget blowup on large tribes
-      await ctx.db.patch(member._id, { banned: true });
+      const patch = { banned: true };
+      await ctx.db.patch(member._id, patch);
+      await adjustTribeMemberCount(
+        ctx,
+        tribeId,
+        tribeMemberActiveDelta(member, { ...member, ...patch })
+      );
       await ctx.scheduler.runAfter(0, internal.messages.deleteByAuthor, { tribeId, authorId });
       await ctx.db.insert("messages", {
         tribeId,
@@ -176,7 +190,7 @@ export const moderateMessage = internalMutation({
       });
     }
 
-    await ctx.db.patch(tribeId, { lastMessageAt: now });
+    await touchTribeActivity(ctx, tribeId);
   },
 });
 
@@ -199,7 +213,7 @@ export const greetTribe = internalMutation({
       avatarSeed: BOT_LEADER.avatarSeed,
       likes: [],
     });
-    await ctx.db.patch(tribeId, { lastMessageAt: Date.now() });
+    await touchTribeActivity(ctx, tribeId, tribe);
   },
 });
 
@@ -223,6 +237,6 @@ export const welcomeUser = internalMutation({
       avatarSeed: BOT_LEADER.avatarSeed,
       likes: [],
     });
-    await ctx.db.patch(tribeId, { lastMessageAt: Date.now() });
+    await touchTribeActivity(ctx, tribeId, tribe);
   },
 });
