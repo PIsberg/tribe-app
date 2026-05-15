@@ -178,8 +178,9 @@ async function createTribe(http, name) {
 // Pure write pressure. HTTP only.
 
 async function chatBurst() {
-  const http = new ConvexHttpClient(URL);
-  const tribe = await createTribe(http, `LT-burst-${Date.now()}`);
+  // Per-user clients — see note in mixed() about connection-pool serialisation.
+  const setupClient = new ConvexHttpClient(URL);
+  const tribe = await createTribe(setupClient, `LT-burst-${Date.now()}`);
   console.log(`[chat-burst] tribe=${tribe.tribeId}, users=${USERS}, duration=${DURATION_S}s`);
 
   const sendStats = new Stats("send");
@@ -199,6 +200,7 @@ async function chatBurst() {
   // Stagger user start across ramp window.
   await Promise.all(users.map(async (u, i) => {
     await sleep((i / USERS) * RAMP_S * 1000);
+    const http = new ConvexHttpClient(URL);
 
     // Join the tribe (creates member row).
     await timed(joinStats, () =>
@@ -366,10 +368,15 @@ async function fanout() {
 // N users spread across M tribes. Mix of joins, sends, likes, typing.
 
 async function mixed() {
-  const http = new ConvexHttpClient(URL);
+  // One HTTP client per virtual user. The default keep-alive pool tops out at
+  // ~6 connections per host, so sharing one client across 40+ users serializes
+  // mutations and turns p50 into "queue depth × per-mutation latency" instead
+  // of actual server latency. Each real user has their own browser/connection
+  // anyway, so per-user clients are also more faithful.
+  const setupClient = new ConvexHttpClient(URL);
   const tribes = [];
   for (let i = 0; i < TRIBES; i++) {
-    tribes.push(await createTribe(http, `LT-mixed-${Date.now()}-${i}`));
+    tribes.push(await createTribe(setupClient, `LT-mixed-${Date.now()}-${i}`));
   }
   console.log(`[mixed] tribes=${TRIBES}, users=${USERS}, duration=${DURATION_S}s`);
 
@@ -384,6 +391,7 @@ async function mixed() {
 
   await Promise.all(Array.from({ length: USERS }, async (_, i) => {
     await sleep((i / USERS) * RAMP_S * 1000);
+    const http = new ConvexHttpClient(URL);
     const u = {
       userId: randId(`mu${i}`),
       name: `mixed_${i}`,
