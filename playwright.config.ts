@@ -1,4 +1,18 @@
 import { defineConfig, devices } from "@playwright/test";
+import { readFileSync } from "fs";
+
+// Load E2E_* vars from .env.local so admin tests get the right token.
+// Only E2E_-prefixed vars are loaded; others are left to the shell / CI.
+try {
+  for (const line of readFileSync(".env.local", "utf-8").split(/\r?\n/)) {
+    const m = line.match(/^(E2E_\w+)\s*=\s*'([^']*)'|^(E2E_\w+)\s*=\s*"([^"]*)"|^(E2E_\w+)\s*=\s*(.+?)(?:\s+#.*)?$/);
+    if (m) {
+      const key = m[1] ?? m[3] ?? m[5];
+      const val = (m[2] ?? m[4] ?? m[6] ?? "").trim();
+      if (key && !process.env[key]) process.env[key] = val;
+    }
+  }
+} catch { /* .env.local absent */ }
 
 export default defineConfig({
   testDir: "./tests/e2e",

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 export const BOT_LEADER = {
   id: "bot_tribe_leader",
@@ -71,7 +72,7 @@ export const moderateMessage = internalMutation({
       .withIndex("by_tribeId_and_timestamp", (q) =>
         q.eq("tribeId", tribeId).gt("timestamp", spamWindow)
       )
-      .collect();
+      .take(100);
     const isSpam =
       recentMsgs.filter((m) => m.authorId === authorId && !m.parentId).length >= 5;
 
@@ -161,21 +162,9 @@ export const moderateMessage = internalMutation({
         likes: [],
       });
     } else {
-      // ban
+      // ban — schedule batched deletion to avoid tx-budget blowup on large tribes
       await ctx.db.patch(member._id, { banned: true });
-      // Erase all their messages from the tribe
-      const allMsgs = await ctx.db
-        .query("messages")
-        .withIndex("by_tribeId_and_timestamp", (q) => q.eq("tribeId", tribeId))
-        .collect();
-      await Promise.all(
-        allMsgs
-          .filter((m) => m.authorId === authorId)
-          .map(async (m) => {
-            if (m.storageId) await ctx.storage.delete(m.storageId);
-            await ctx.db.delete(m._id);
-          })
-      );
+      await ctx.scheduler.runAfter(0, internal.messages.deleteByAuthor, { tribeId, authorId });
       await ctx.db.insert("messages", {
         tribeId,
         text: `🔨 @${authorName} has been permanently banned from this campfire. The tribe has spoken.`,

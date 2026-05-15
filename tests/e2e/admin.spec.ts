@@ -10,6 +10,10 @@ async function loginAsAdmin(page: Page) {
 
 async function waitForAdminTable(page: Page) {
   await expect(page.locator("[data-testid='admin-tribe-list']")).toBeVisible({ timeout: 15000 });
+  // Wait for data to populate: either a row appears or the empty-state message
+  await expect(
+    page.locator("[data-testid='admin-tribe-row']").first().or(page.getByText("No campfires match."))
+  ).toBeVisible({ timeout: 10000 }).catch(() => {});
 }
 
 test.describe("admin — authentication", () => {
@@ -159,7 +163,7 @@ test.describe("admin — tribe actions (require an active tribe)", () => {
     // Should navigate to the chat view
     await expect(page.locator("[data-testid='inner-circle']")).toBeVisible({ timeout: 10000 });
     // Identity should show @Tribe-admin (visible in the header area)
-    await expect(page.getByText("@Tribe-admin", { exact: false })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText("@Tribe-admin", { exact: false }).first()).toBeVisible({ timeout: 5000 });
   });
 });
 

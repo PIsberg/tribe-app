@@ -225,7 +225,9 @@ test.describe("tribe — identity", () => {
 
     const nameInput = page.getByRole("textbox", { name: /your name/i });
     await expect(nameInput).toBeVisible({ timeout: 3000 });
-    await nameInput.fill("FireStarter");
+    // Use a unique suffix to avoid collisions when the test re-runs in the same tribe.
+    const testName = `FireStarter${Date.now().toString().slice(-5)}`;
+    await nameInput.fill(testName);
     await page.getByRole("button", { name: /join the fire/i }).click();
 
     await expect(nameInput).not.toBeVisible({ timeout: 3000 });

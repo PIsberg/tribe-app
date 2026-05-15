@@ -2,6 +2,8 @@ import { v, ConvexError } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { incrementCounter, ensureUser } from "./metrics";
+import { checkRateLimit } from "./lib/rateLimit";
+import { assertInRadius } from "./lib/geofence";
 
 const THIRTY_MINUTES = 30 * 60 * 1000;
 
@@ -9,16 +11,34 @@ export const list = query({
   args: { tribeId: v.id("tribes") },
   handler: async (ctx, args) => {
     const cutoff = Date.now() - THIRTY_MINUTES;
+    // Newest-first so the 200-message cap always includes the latest messages.
     const messages = await ctx.db
       .query("messages")
       .withIndex("by_tribeId_and_timestamp", (q) =>
         q.eq("tribeId", args.tribeId).gt("timestamp", cutoff)
       )
-      .order("asc")
+      .order("desc")
       .take(200);
+    messages.reverse(); // chronological order for the frontend
+
+    // Single bulk fetch for all tribe reactions — avoids N+1 per message.
+    const allReactions = await ctx.db
+      .query("reactions")
+      .withIndex("by_tribeId", (q) => q.eq("tribeId", args.tribeId))
+      .take(10000);
+    const likesByMsg = new Map<string, string[]>();
+    for (const r of allReactions) {
+      if (r.kind === "like") {
+        const arr = likesByMsg.get(r.messageId as string) ?? [];
+        arr.push(r.userId);
+        likesByMsg.set(r.messageId as string, arr);
+      }
+    }
+
     return Promise.all(
       messages.map(async (m) => ({
         ...m,
+        likes: likesByMsg.get(m._id as string) ?? [],
         imageUrl: m.storageId ? await ctx.storage.getUrl(m.storageId) : null,
       }))
     );
@@ -36,9 +56,30 @@ export const listThread = query({
       )
       .order("asc")
       .take(50);
+
+    if (messages.length === 0) return [];
+
+    // Bulk-fetch reactions for the whole tribe — 1 query instead of N.
+    const parent = await ctx.db.get(args.parentId);
+    const likesByMsg = new Map<string, string[]>();
+    if (parent?.tribeId) {
+      const allReactions = await ctx.db
+        .query("reactions")
+        .withIndex("by_tribeId", (q) => q.eq("tribeId", parent.tribeId))
+        .take(10000);
+      for (const r of allReactions) {
+        if (r.kind === "like") {
+          const arr = likesByMsg.get(r.messageId as string) ?? [];
+          arr.push(r.userId);
+          likesByMsg.set(r.messageId as string, arr);
+        }
+      }
+    }
+
     return Promise.all(
       messages.map(async (m) => ({
         ...m,
+        likes: likesByMsg.get(m._id as string) ?? [],
         imageUrl: m.storageId ? await ctx.storage.getUrl(m.storageId) : null,
       }))
     );
@@ -46,8 +87,19 @@ export const listThread = query({
 });
 
 export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    userId: v.string(),
+    tribeId: v.id("tribes"),
+  },
+  handler: async (ctx, args) => {
+    const member = await ctx.db
+      .query("tribeMembers")
+      .withIndex("by_tribeId_and_userId", (q) =>
+        q.eq("tribeId", args.tribeId).eq("userId", args.userId)
+      )
+      .first();
+    if (!member) throw new ConvexError("You must be a tribe member to upload images.");
+    await checkRateLimit(ctx, `upload:${args.userId}`, 5, 60_000);
     return ctx.storage.generateUploadUrl();
   },
 });
@@ -61,11 +113,18 @@ export const send = mutation({
     avatarSeed: v.string(),
     parentId: v.optional(v.id("messages")),
     storageId: v.optional(v.id("_storage")),
+    lat: v.optional(v.number()),
+    lng: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const { parentId, storageId, ...rest } = args;
+    const { parentId, storageId, lat, lng, ...rest } = args;
 
-    // Enforcement: check ban / temp-kick before inserting anything
+    const tribe = await ctx.db.get(args.tribeId);
+    if (!tribe) throw new ConvexError("Campfire not found.");
+    assertInRadius(tribe, lat, lng);
+
+    await checkRateLimit(ctx, `send:${args.authorId}:${args.tribeId}`, 30, 60_000);
+
     const member = await ctx.db
       .query("tribeMembers")
       .withIndex("by_tribeId_and_userId", (q) =>
@@ -99,7 +158,6 @@ export const send = mutation({
     const id = await ctx.db.insert("messages", {
       ...rest,
       timestamp: Date.now(),
-      likes: [],
       ...(parentId ? { parentId } : {}),
       ...(storageId ? { storageId } : {}),
     });
@@ -111,7 +169,6 @@ export const send = mutation({
     }
     await ctx.db.patch(args.tribeId, { lastMessageAt: Date.now() });
 
-    // Register member as fallback if joinTribe was never called
     if (!parentId) {
       if (!member) {
         await ctx.db.insert("tribeMembers", {
@@ -123,7 +180,6 @@ export const send = mutation({
         });
       }
 
-      // Schedule moderation check for every top-level message
       await ctx.scheduler.runAfter(0, internal.bots.moderateMessage, {
         tribeId: args.tribeId,
         authorId: args.authorId,
@@ -142,14 +198,26 @@ export const toggleLike = mutation({
     userId: v.string(),
   },
   handler: async (ctx, args) => {
-    const message = await ctx.db.get(args.messageId);
-    if (!message) return;
-    const liked = message.likes.includes(args.userId);
-    await ctx.db.patch(args.messageId, {
-      likes: liked
-        ? message.likes.filter((id) => id !== args.userId)
-        : [...message.likes, args.userId],
-    });
+    await checkRateLimit(ctx, `like:${args.userId}`, 60, 60_000);
+    const existing = await ctx.db
+      .query("reactions")
+      .withIndex("by_messageId_and_userId", (q) =>
+        q.eq("messageId", args.messageId).eq("userId", args.userId)
+      )
+      .first();
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    } else {
+      const message = await ctx.db.get(args.messageId);
+      if (!message) return;
+      await ctx.db.insert("reactions", {
+        messageId: args.messageId,
+        tribeId: message.tribeId,
+        userId: args.userId,
+        kind: "like",
+        createdAt: Date.now(),
+      });
+    }
   },
 });
 
@@ -170,10 +238,18 @@ export const deleteMessage = mutation({
         });
       }
     }
+    // Clean up any reactions on this message before deleting it.
+    const reactions = await ctx.db
+      .query("reactions")
+      .withIndex("by_messageId", (q) => q.eq("messageId", args.messageId))
+      .take(500);
+    await Promise.all(reactions.map((r) => ctx.db.delete(r._id)));
     await ctx.db.delete(args.messageId);
   },
 });
 
+// Self-rescheduling: if there are ≥500 expired messages, schedules another run immediately
+// so the backlog drains without waiting for the next cron tick.
 export const deleteOldMessages = internalMutation({
   args: {},
   handler: async (ctx) => {
@@ -181,13 +257,49 @@ export const deleteOldMessages = internalMutation({
     const old = await ctx.db
       .query("messages")
       .withIndex("by_timestamp", (q) => q.lt("timestamp", cutoff))
-      .take(100);
+      .take(500);
     await Promise.all(
       old.map(async (m) => {
         if (m.storageId) await ctx.storage.delete(m.storageId);
+        // Clean up reactions for this message.
+        const reactions = await ctx.db
+          .query("reactions")
+          .withIndex("by_messageId", (q) => q.eq("messageId", m._id))
+          .take(500);
+        await Promise.all(reactions.map((r) => ctx.db.delete(r._id)));
         await ctx.db.delete(m._id);
       })
     );
+    if (old.length === 500) {
+      await ctx.scheduler.runAfter(0, internal.messages.deleteOldMessages, {});
+    }
     return old.length;
+  },
+});
+
+// Deletes all messages in a tribe by a specific author, in batches. Self-rescheduling.
+export const deleteByAuthor = internalMutation({
+  args: { tribeId: v.id("tribes"), authorId: v.string() },
+  handler: async (ctx, { tribeId, authorId }) => {
+    const msgs = await ctx.db
+      .query("messages")
+      .withIndex("by_tribeId_and_authorId", (q) =>
+        q.eq("tribeId", tribeId).eq("authorId", authorId)
+      )
+      .take(200);
+    await Promise.all(
+      msgs.map(async (m) => {
+        if (m.storageId) await ctx.storage.delete(m.storageId);
+        const reactions = await ctx.db
+          .query("reactions")
+          .withIndex("by_messageId", (q) => q.eq("messageId", m._id))
+          .take(500);
+        await Promise.all(reactions.map((r) => ctx.db.delete(r._id)));
+        await ctx.db.delete(m._id);
+      })
+    );
+    if (msgs.length === 200) {
+      await ctx.scheduler.runAfter(0, internal.messages.deleteByAuthor, { tribeId, authorId });
+    }
   },
 });
