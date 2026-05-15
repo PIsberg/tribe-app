@@ -14,6 +14,7 @@ import type * as crons from "../crons.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_geofence from "../lib/geofence.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
+import type * as lib_tribeActivity from "../lib/tribeActivity.js";
 import type * as members from "../members.js";
 import type * as messages from "../messages.js";
 import type * as metrics from "../metrics.js";
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   "lib/geofence": typeof lib_geofence;
   "lib/rateLimit": typeof lib_rateLimit;
+  "lib/tribeActivity": typeof lib_tribeActivity;
   members: typeof members;
   messages: typeof messages;
   metrics: typeof metrics;

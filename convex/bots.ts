@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { adjustTribeMemberCount, tribeMemberActiveDelta } from "./metrics";
+import { touchTribeActivity } from "./lib/tribeActivity";
 
 export const BOT_LEADER = {
   id: "bot_tribe_leader",
@@ -189,7 +190,7 @@ export const moderateMessage = internalMutation({
       });
     }
 
-    await ctx.db.patch(tribeId, { lastMessageAt: now });
+    await touchTribeActivity(ctx, tribeId);
   },
 });
 
@@ -212,7 +213,7 @@ export const greetTribe = internalMutation({
       avatarSeed: BOT_LEADER.avatarSeed,
       likes: [],
     });
-    await ctx.db.patch(tribeId, { lastMessageAt: Date.now() });
+    await touchTribeActivity(ctx, tribeId, tribe);
   },
 });
 
@@ -236,6 +237,6 @@ export const welcomeUser = internalMutation({
       avatarSeed: BOT_LEADER.avatarSeed,
       likes: [],
     });
-    await ctx.db.patch(tribeId, { lastMessageAt: Date.now() });
+    await touchTribeActivity(ctx, tribeId, tribe);
   },
 });

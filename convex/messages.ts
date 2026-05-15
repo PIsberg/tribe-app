@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import { incrementCounter, ensureUser, adjustTribeMemberCount } from "./metrics";
 import { checkRateLimit } from "./lib/rateLimit";
 import { assertInRadius } from "./lib/geofence";
+import { touchTribeActivity } from "./lib/tribeActivity";
 
 const THIRTY_MINUTES = 30 * 60 * 1000;
 
@@ -135,7 +136,7 @@ export const send = mutation({
         await ctx.db.patch(parentId, { replyCount: (parent.replyCount ?? 0) + 1 });
       }
     }
-    await ctx.db.patch(args.tribeId, { lastMessageAt: Date.now() });
+    await touchTribeActivity(ctx, args.tribeId, tribe);
 
     if (!parentId) {
       if (!member) {
