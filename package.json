@@ -15,7 +15,11 @@
     "convex:deploy": "npx convex deploy",
     "cap:sync": "npm run build && npx cap sync",
     "cap:android": "npm run build && npx cap sync android && npx cap open android",
-    "cap:ios": "npm run build && npx cap sync ios && npx cap open ios"
+    "cap:ios": "npm run build && npx cap sync ios && npx cap open ios",
+    "loadtest": "node scripts/loadtest.mjs",
+    "loadtest:burst": "node scripts/loadtest.mjs --scenario=chat-burst --users=30 --duration=30",
+    "loadtest:fanout": "node scripts/loadtest.mjs --scenario=fanout --users=100 --writers=5 --duration=30",
+    "loadtest:mixed": "node scripts/loadtest.mjs --scenario=mixed --users=100 --tribes=10 --duration=60"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",
