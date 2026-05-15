@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { assertAdmin, getAdminToken, normalize } from "./lib/auth";
-import { ensureUser } from "./metrics";
+import { ensureUser, adjustTribeMemberCount, tribeMemberActiveDelta } from "./metrics";
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -90,11 +90,13 @@ export const adminJoinTribe = mutation({
       )
       .first();
     if (existing) {
-      await ctx.db.patch(existing._id, {
-        userName: ADMIN_NAME,
-        kicked: false,
-        banned: false,
-      });
+      const patch = { userName: ADMIN_NAME, kicked: false, banned: false };
+      await ctx.db.patch(existing._id, patch);
+      await adjustTribeMemberCount(
+        ctx,
+        tribeId,
+        tribeMemberActiveDelta(existing, { ...existing, ...patch })
+      );
       return;
     }
     await ctx.db.insert("tribeMembers", {
@@ -104,6 +106,7 @@ export const adminJoinTribe = mutation({
       avatarSeed,
       joinedAt: Date.now(),
     });
+    await adjustTribeMemberCount(ctx, tribeId, 1);
   },
 });
 
@@ -137,7 +140,15 @@ export const kickMember = mutation({
   args: { token: v.string(), memberId: v.id("tribeMembers") },
   handler: async (ctx, { token, memberId }) => {
     assertAdmin(token);
-    await ctx.db.patch(memberId, { kicked: true });
+    const before = await ctx.db.get(memberId);
+    if (!before) return;
+    const patch = { kicked: true };
+    await ctx.db.patch(memberId, patch);
+    await adjustTribeMemberCount(
+      ctx,
+      before.tribeId,
+      tribeMemberActiveDelta(before, { ...before, ...patch })
+    );
   },
 });
 
@@ -145,7 +156,15 @@ export const banMember = mutation({
   args: { token: v.string(), memberId: v.id("tribeMembers") },
   handler: async (ctx, { token, memberId }) => {
     assertAdmin(token);
-    await ctx.db.patch(memberId, { banned: true });
+    const before = await ctx.db.get(memberId);
+    if (!before) return;
+    const patch = { banned: true };
+    await ctx.db.patch(memberId, patch);
+    await adjustTribeMemberCount(
+      ctx,
+      before.tribeId,
+      tribeMemberActiveDelta(before, { ...before, ...patch })
+    );
   },
 });
 
@@ -153,6 +172,14 @@ export const unkickMember = mutation({
   args: { token: v.string(), memberId: v.id("tribeMembers") },
   handler: async (ctx, { token, memberId }) => {
     assertAdmin(token);
-    await ctx.db.patch(memberId, { kicked: false, banned: false });
+    const before = await ctx.db.get(memberId);
+    if (!before) return;
+    const patch = { kicked: false, banned: false };
+    await ctx.db.patch(memberId, patch);
+    await adjustTribeMemberCount(
+      ctx,
+      before.tribeId,
+      tribeMemberActiveDelta(before, { ...before, ...patch })
+    );
   },
 });

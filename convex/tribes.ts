@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { incrementCounter, ensureUser } from "./metrics";
+import { incrementCounter, ensureUser, readTribeMemberCount } from "./metrics";
 
 const TRIBE_TTL = 24 * 60 * 60 * 1000;
 const NEARBY_RADIUS_M = 50_000;
@@ -105,13 +105,10 @@ export const listWithCountsNearby = query({
         return t.createdAt > cutoff;
       });
     return Promise.all(
-      tribes.map(async (t) => {
-        const members = await ctx.db
-          .query("tribeMembers")
-          .withIndex("by_tribeId", (q) => q.eq("tribeId", t._id))
-          .take(500);
-        return { ...t, memberCount: members.filter((m) => !m.kicked && !m.banned).length };
-      })
+      tribes.map(async (t) => ({
+        ...t,
+        memberCount: await readTribeMemberCount(ctx, t._id),
+      }))
     );
   },
 });
@@ -126,13 +123,10 @@ export const listWithCounts = query({
       .order("asc")
       .take(100);
     return Promise.all(
-      tribes.map(async (t) => {
-        const members = await ctx.db
-          .query("tribeMembers")
-          .withIndex("by_tribeId", (q) => q.eq("tribeId", t._id))
-          .take(500);
-        return { ...t, memberCount: members.filter((m) => !m.kicked && !m.banned).length };
-      })
+      tribes.map(async (t) => ({
+        ...t,
+        memberCount: await readTribeMemberCount(ctx, t._id),
+      }))
     );
   },
 });

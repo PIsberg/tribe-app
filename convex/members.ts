@@ -1,7 +1,7 @@
 import { v, ConvexError } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { ensureUser } from "./metrics";
+import { ensureUser, adjustTribeMemberCount } from "./metrics";
 import { checkRateLimit } from "./lib/rateLimit";
 
 // Bounded at 500 so a long-lived tribe with churn (24h TTL, joiners come and go,
@@ -63,6 +63,7 @@ export const joinTribe = mutation({
       avatarSeed,
       joinedAt: Date.now(),
     });
+    await adjustTribeMemberCount(ctx, tribeId, 1);
 
     const tribe = await ctx.db.get(tribeId);
     if (tribe) {

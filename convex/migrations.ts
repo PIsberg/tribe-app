@@ -1,4 +1,5 @@
 import { internalMutation } from "./_generated/server";
+import { adjustTribeMemberCount } from "./metrics";
 
 const BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz";
 function encode(lat: number, lng: number, precision = 4): string {
@@ -35,5 +36,32 @@ export const backfillGeohashes = internalMutation({
       }
     }
     return { updated };
+  },
+});
+
+/**
+ * One-shot: initializes the sharded `tribe_members:<id>` counter for every
+ * existing tribe by summing active members. Idempotent: re-running adds the
+ * same delta again, so only run this once per deploy of the counter feature.
+ * After this, the per-tribe member fetch is no longer needed in
+ * listWithCounts(Nearby).
+ */
+export const backfillTribeMemberCounts = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const tribes = await ctx.db.query("tribes").take(2000);
+    let updated = 0;
+    for (const t of tribes) {
+      const members = await ctx.db
+        .query("tribeMembers")
+        .withIndex("by_tribeId", (q) => q.eq("tribeId", t._id))
+        .take(500);
+      const active = members.filter((m) => !m.kicked && !m.banned).length;
+      if (active > 0) {
+        await adjustTribeMemberCount(ctx, t._id, active);
+        updated++;
+      }
+    }
+    return { tribesScanned: tribes.length, tribesSeeded: updated };
   },
 });

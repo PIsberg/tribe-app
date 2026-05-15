@@ -1,7 +1,7 @@
 import { v, ConvexError } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { incrementCounter, ensureUser } from "./metrics";
+import { incrementCounter, ensureUser, adjustTribeMemberCount } from "./metrics";
 import { checkRateLimit } from "./lib/rateLimit";
 import { assertInRadius } from "./lib/geofence";
 
@@ -146,6 +146,7 @@ export const send = mutation({
           avatarSeed: args.avatarSeed,
           joinedAt: Date.now(),
         });
+        await adjustTribeMemberCount(ctx, args.tribeId, 1);
       }
 
       await ctx.scheduler.runAfter(0, internal.bots.moderateMessage, {
