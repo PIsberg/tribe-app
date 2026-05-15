@@ -10,9 +10,13 @@ export default defineSchema({
     createdAt: v.number(),
     lastMessageAt: v.optional(v.number()),
     geohash4: v.optional(v.string()),
+    // For overflow tribes: id of the original tribe this is sharded from.
+    // Null/undefined on the root tribe in the family.
+    overflowOf: v.optional(v.id("tribes")),
   })
     .index("by_createdAt", ["createdAt"])
-    .index("by_geohash4", ["geohash4"]),
+    .index("by_geohash4", ["geohash4"])
+    .index("by_overflowOf", ["overflowOf"]),
 
   typing: defineTable({
     tribeId: v.id("tribes"),

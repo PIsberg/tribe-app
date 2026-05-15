@@ -39,10 +39,11 @@ interface InnerCircleProps {
   geo: GeoState;
   onLeave: () => void;
   onJoinOther: (tribe: Tribe) => void;
+  onAutoRedirect: (newTribeId: Id<"tribes">) => void;
   isAdmin?: boolean;
 }
 
-function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = false }: InnerCircleProps) {
+function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, onAutoRedirect, isAdmin = false }: InnerCircleProps) {
   const identity = useTribeIdentity();
   const tribeId = tribe._id;
   // Drop reactive subscriptions when the tab has been hidden for 30s+. A
@@ -67,7 +68,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
   const sendMutation = useMutation(api.messages.send);
   const toggleLikeMutation = useMutation(api.messages.toggleLike);
   const deleteMessageMutation = useMutation(api.messages.deleteMessage);
-  const joinTribeMutation = useMutation(api.members.joinTribe);
+  const joinOrOverflowMutation = useMutation(api.members.joinOrOverflow);
 
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [showNearby, setShowNearby] = useState(false);
@@ -88,19 +89,28 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
   // Admin skips this — their member row is created by admin.adminJoinTribe.
   useEffect(() => {
     if (!identity.nameChosen || isAdmin) return;
-    joinTribeMutation({
+    joinOrOverflowMutation({
       tribeId,
       userId: identity.userId,
       userName: identity.tribeName,
       avatarSeed: identity.avatarSeed,
     }).then(
-      () => { setNameError(null); setFireFull(false); },
+      (result) => {
+        setNameError(null);
+        setFireFull(false);
+        if (result.redirected && result.tribeId !== tribeId) {
+          onAutoRedirect(result.tribeId as Id<"tribes">);
+        }
+      },
       (err: unknown) => {
         const data =
           err && typeof err === "object" && "data" in err && typeof (err as { data: unknown }).data === "string"
             ? (err as { data: string }).data
             : null;
         if (data === "FIRE_FULL") {
+          // Defensive: joinOrOverflow shouldn't throw FIRE_FULL — it creates
+          // overflow tribes — but show the cap UI if something pathological
+          // happens (e.g., all overflows full at exactly the same instant).
           setFireFull(true);
           return;
         }
@@ -109,7 +119,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
         setShowNamePicker(true);
       }
     );
-  }, [identity.nameChosen, identity.userId, identity.tribeName, identity.avatarSeed, tribeId, joinTribeMutation, isAdmin]);
+  }, [identity.nameChosen, identity.userId, identity.tribeName, identity.avatarSeed, tribeId, joinOrOverflowMutation, isAdmin, onAutoRedirect]);
 
   const currentMember = (members ?? []).find((m) => m.userId === identity.userId);
   const mutedUntil = currentMember?.kickedUntil;
@@ -675,6 +685,10 @@ function TribeShell() {
               geo={geo}
               onLeave={handleLeave}
               onJoinOther={handleJoinOther}
+              onAutoRedirect={(id) => {
+                setActiveTribeId(id);
+                setConfirmedTribeId(id);
+              }}
               isAdmin={isAdmin}
             />
           </div>
