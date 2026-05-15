@@ -74,6 +74,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
   const [showManifesto, setShowManifesto] = useState(false);
   const [showNamePicker, setShowNamePicker] = useState(!identity.nameChosen);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [fireFull, setFireFull] = useState(false);
   const messages = useMemo(() => {
     const raw = (rawMessages ?? []) as unknown as Message[];
     if (!likesByMsg) return raw.map((m) => ({ ...m, likes: m.likes ?? [] }));
@@ -93,14 +94,17 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
       userName: identity.tribeName,
       avatarSeed: identity.avatarSeed,
     }).then(
-      () => setNameError(null),
+      () => { setNameError(null); setFireFull(false); },
       (err: unknown) => {
-        const msg =
+        const data =
           err && typeof err === "object" && "data" in err && typeof (err as { data: unknown }).data === "string"
             ? (err as { data: string }).data
-            : err instanceof Error
-              ? err.message
-              : "Could not join — try a different name.";
+            : null;
+        if (data === "FIRE_FULL") {
+          setFireFull(true);
+          return;
+        }
+        const msg = data ?? (err instanceof Error ? err.message : "Could not join — try a different name.");
         setNameError(msg);
         setShowNamePicker(true);
       }
@@ -191,6 +195,45 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
         userId={identity.userId}
         mutedUntil={mutedUntil}
       />
+
+      {/* Fire-at-capacity overlay */}
+      <AnimatePresence>
+        {fireFull && (
+          <motion.div
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm px-8 text-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="text-5xl mb-4">🔥</div>
+            <h2 className="font-mono text-lg font-bold text-white mb-2">This fire is full</h2>
+            <p className="font-mono text-sm text-fire-char/60 mb-1">
+              <span className="text-fire-glow font-bold">{tribe.name}</span> is at capacity.
+            </p>
+            <p className="font-mono text-xs text-fire-char/40 mb-6">
+              Try a nearby fire — or light your own.
+            </p>
+            <div className="flex gap-3">
+              {nearbyOthers.length > 0 && (
+                <motion.button
+                  onClick={() => setShowNearby(true)}
+                  whileTap={{ scale: 0.96 }}
+                  className="px-5 py-2.5 rounded-xl border border-fire-ember/40 font-mono text-sm text-fire-glow hover:bg-fire-ember/10 transition-all"
+                >
+                  Nearby ({nearbyOthers.length})
+                </motion.button>
+              )}
+              <motion.button
+                onClick={onLeave}
+                whileTap={{ scale: 0.96 }}
+                className="px-5 py-2.5 rounded-xl border border-fire-char/30 font-mono text-sm text-fire-char/60 hover:border-fire-ember/40 hover:text-white transition-all"
+              >
+                ← Back
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Kicked overlay */}
       <AnimatePresence>

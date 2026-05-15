@@ -2,6 +2,7 @@ import { v, ConvexError } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { incrementCounter, ensureUser, adjustTribeMemberCount } from "./metrics";
+import { assertFireHasCapacity } from "./lib/capacity";
 import { checkRateLimit } from "./lib/rateLimit";
 import { assertInRadius } from "./lib/geofence";
 import { touchTribeActivity } from "./lib/tribeActivity";
@@ -140,6 +141,8 @@ export const send = mutation({
 
     if (!parentId) {
       if (!member) {
+        // Auto-create-on-first-message path also respects the soft cap.
+        await assertFireHasCapacity(ctx, args.tribeId, false);
         await ctx.db.insert("tribeMembers", {
           tribeId: args.tribeId,
           userId: args.authorId,

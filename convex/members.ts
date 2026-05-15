@@ -2,6 +2,7 @@ import { v, ConvexError } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { ensureUser, adjustTribeMemberCount } from "./metrics";
+import { assertFireHasCapacity } from "./lib/capacity";
 import { checkRateLimit } from "./lib/rateLimit";
 
 // Bounded at 500 so a long-lived tribe with churn (24h TTL, joiners come and go,
@@ -55,6 +56,10 @@ export const joinTribe = mutation({
       }
       return;
     }
+
+    // First-time join: enforce the per-fire soft cap. Existing members
+    // (above) bypass — they're already counted.
+    await assertFireHasCapacity(ctx, tribeId, false);
 
     await ctx.db.insert("tribeMembers", {
       tribeId,

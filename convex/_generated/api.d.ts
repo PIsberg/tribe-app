@@ -12,6 +12,7 @@ import type * as admin from "../admin.js";
 import type * as bots from "../bots.js";
 import type * as crons from "../crons.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_capacity from "../lib/capacity.js";
 import type * as lib_geofence from "../lib/geofence.js";
 import type * as lib_rateLimit from "../lib/rateLimit.js";
 import type * as lib_tribeActivity from "../lib/tribeActivity.js";
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   bots: typeof bots;
   crons: typeof crons;
   "lib/auth": typeof lib_auth;
+  "lib/capacity": typeof lib_capacity;
   "lib/geofence": typeof lib_geofence;
   "lib/rateLimit": typeof lib_rateLimit;
   "lib/tribeActivity": typeof lib_tribeActivity;
