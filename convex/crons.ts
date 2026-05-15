@@ -24,4 +24,11 @@ crons.interval(
   {}
 );
 
+crons.interval(
+  "purge stale rate-limit rows",
+  { minutes: 10 },
+  internal.lib.rateLimit.purgeStale,
+  {}
+);
+
 export default crons;
