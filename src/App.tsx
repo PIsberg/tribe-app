@@ -44,6 +44,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
   const identity = useTribeIdentity();
   const tribeId = tribe._id;
   const rawMessages = useQuery(api.messages.list, { tribeId });
+  const likesByMsg = useQuery(api.reactions.likesForTribe, { tribeId });
   const members = useQuery(api.members.list, { tribeId });
   const typingUsers = useQuery(api.typing.listTyping, { tribeId, excludeUserId: identity.userId });
   const sendMutation = useMutation(api.messages.send);
@@ -56,7 +57,11 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
   const [showManifesto, setShowManifesto] = useState(false);
   const [showNamePicker, setShowNamePicker] = useState(!identity.nameChosen);
   const [nameError, setNameError] = useState<string | null>(null);
-  const messages = (rawMessages ?? []) as unknown as Message[];
+  const messages = useMemo(() => {
+    const raw = (rawMessages ?? []) as unknown as Message[];
+    if (!likesByMsg) return raw.map((m) => ({ ...m, likes: m.likes ?? [] }));
+    return raw.map((m) => ({ ...m, likes: likesByMsg[m._id] ?? [] }));
+  }, [rawMessages, likesByMsg]);
   const openThreadMessage = openThreadId
     ? messages.find((m) => m._id === openThreadId) ?? null
     : null;

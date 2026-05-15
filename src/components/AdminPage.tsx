@@ -153,6 +153,9 @@ function TribeViewOverlay({
   const messages = useQuery(api.messages.list, {
     tribeId: tribe._id as Id<"tribes">,
   });
+  const likesByMsg = useQuery(api.reactions.likesForTribe, {
+    tribeId: tribe._id as Id<"tribes">,
+  });
   const members = useQuery(api.members.list, {
     tribeId: tribe._id as Id<"tribes">,
   });
@@ -240,9 +243,10 @@ function TribeViewOverlay({
             </div>
             <span className="font-mono text-[9px] text-fire-char/30">
               {timeAgo(msg.timestamp)}
-              {(msg.likes?.length ?? 0) > 0 && (
-                <> · ❤ {msg.likes.length}</>
-              )}
+              {(() => {
+                const n = likesByMsg?.[msg._id]?.length ?? 0;
+                return n > 0 ? <> · ❤ {n}</> : null;
+              })()}
             </span>
           </div>
         ))}

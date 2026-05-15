@@ -38,6 +38,8 @@ export function ThreadPanel({
   const replies = useQuery(api.messages.listThread, {
     parentId: parentMessage._id as Id<"messages">,
   });
+  // Same subscription as InnerCircle — Convex dedupes by (query, args).
+  const likesByMsg = useQuery(api.reactions.likesForTribe, { tribeId });
   const sendMutation = useMutation(api.messages.send);
   const [value, setValue] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -130,16 +132,19 @@ export function ThreadPanel({
             No replies yet
           </div>
         ) : (
-          (replies ?? []).map((reply) => (
-            <MessageBubble
-              key={reply._id}
-              message={reply as unknown as Message}
-              isOwn={reply.authorId === currentUserId}
-              likedByMe={(reply.likes ?? []).includes(currentUserId)}
-              onLike={() => onLike(reply._id)}
-              currentUserName={currentUserName}
-            />
-          ))
+          (replies ?? []).map((reply) => {
+            const likes = likesByMsg?.[reply._id] ?? [];
+            return (
+              <MessageBubble
+                key={reply._id}
+                message={{ ...(reply as unknown as Message), likes }}
+                isOwn={reply.authorId === currentUserId}
+                likedByMe={likes.includes(currentUserId)}
+                onLike={() => onLike(reply._id)}
+                currentUserName={currentUserName}
+              />
+            );
+          })
         )}
         <div ref={bottomRef} />
       </div>
