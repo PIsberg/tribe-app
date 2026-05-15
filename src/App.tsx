@@ -24,6 +24,7 @@ import { useGeolocation } from "./hooks/useGeolocation";
 import { useActiveTribe } from "./hooks/useActiveTribe";
 import { useTribeIdentity } from "./hooks/useTribeIdentity";
 import { usePageActive } from "./hooks/usePageActive";
+import { usePushLatencyTelemetry } from "./hooks/usePushLatencyTelemetry";
 import { haversineDistance, formatDistance, GEOFENCE_RADIUS_M } from "./utils/geo";
 import type { Message } from "./components/MessageBubble";
 import type { GeoState } from "./hooks/useGeolocation";
@@ -125,8 +126,9 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
       .filter((t) => haversineDistance(geo.coords!.lat, geo.coords!.lng, t.lat, t.lng) <= 50_000);
   }, [allTribes, tribeId, geo.coords]);
 
-  const send = (text: string, storageId?: Id<"_storage">) =>
-    sendMutation({
+  const trackPushLatency = usePushLatencyTelemetry(tribeId, messages);
+  const send = async (text: string, storageId?: Id<"_storage">) => {
+    const id = await sendMutation({
       tribeId,
       text,
       author: identity.tribeName,
@@ -135,6 +137,9 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, isAdmin = fa
       ...(storageId ? { storageId } : {}),
       ...(geo.coords ? { lat: geo.coords.lat, lng: geo.coords.lng } : {}),
     });
+    if (id) trackPushLatency(id as string);
+    return id;
+  };
 
   const handleLike = (messageId: string) =>
     toggleLikeMutation({
