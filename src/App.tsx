@@ -31,6 +31,17 @@ import type { GeoState } from "./hooks/useGeolocation";
 
 type Tribe = Doc<"tribes">;
 
+// Returns the most recent non-undefined value of `v`. Used to keep showing
+// the last query snapshot while the subscription is "skip" (tab hidden).
+// Uses the React-blessed "setState-during-render" pattern: when the input
+// goes undefined we keep `cached`; when it produces a fresh value, render
+// is re-run synchronously with the updated cache. No effect, no ref-write.
+function useLastDefined<T>(v: T | undefined): T | undefined {
+  const [cached, setCached] = useState<T | undefined>(v);
+  if (v !== undefined && v !== cached) setCached(v);
+  return v ?? cached;
+}
+
 // ─── Inner circle view ───────────────────────────────────────────────────────
 
 interface InnerCircleProps {
@@ -59,12 +70,9 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, onAutoRedire
   );
   // Preserve last-known snapshots during the hidden→visible transition so
   // the UI doesn't flash empty between re-subscribe and first frame.
-  const [rawMessages, setRawMessages] = useState<typeof liveMessages>(undefined);
-  const [likesByMsg, setLikesByMsg] = useState<typeof liveLikes>(undefined);
-  const [members, setMembers] = useState<typeof liveMembers>(undefined);
-  useEffect(() => { if (liveMessages !== undefined) setRawMessages(liveMessages); }, [liveMessages]);
-  useEffect(() => { if (liveLikes !== undefined) setLikesByMsg(liveLikes); }, [liveLikes]);
-  useEffect(() => { if (liveMembers !== undefined) setMembers(liveMembers); }, [liveMembers]);
+  const rawMessages = useLastDefined(liveMessages);
+  const likesByMsg = useLastDefined(liveLikes);
+  const members = useLastDefined(liveMembers);
   const sendMutation = useMutation(api.messages.send);
   const toggleLikeMutation = useMutation(api.messages.toggleLike);
   const deleteMessageMutation = useMutation(api.messages.deleteMessage);
