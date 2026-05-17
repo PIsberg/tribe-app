@@ -15,7 +15,11 @@ export type AdminHook = {
 function readToken(): string | null {
   const token = sessionStorage.getItem(ADMIN_TOKEN_KEY);
   const legacyToken = localStorage.getItem(ADMIN_TOKEN_KEY);
-  if (legacyToken) localStorage.removeItem(ADMIN_TOKEN_KEY);
+  if (legacyToken) {
+    if (!token) sessionStorage.setItem(ADMIN_TOKEN_KEY, legacyToken);
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    return token ?? legacyToken;
+  }
   return token;
 }
 
