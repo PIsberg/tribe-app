@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { avatarDataUrl } from "../utils/avatar";
+import { ADMIN_TOKEN_KEY } from "./useAdmin";
 
 export type TribeIdentity = {
   userId: string;
@@ -14,7 +15,14 @@ const IDENTITY_KEY = "tribe:identity";
 type Stored = Omit<TribeIdentity, "avatarUrl">;
 
 function generateUserId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function isLegacyUserId(userId: string): boolean {
+  return /^[a-z0-9]+-[a-z0-9]{7}$/.test(userId);
 }
 
 function loadOrCreate(): Stored {
@@ -23,12 +31,15 @@ function loadOrCreate(): Stored {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<Stored>;
       if (parsed.userId && parsed.avatarSeed) {
-        return {
-          userId: parsed.userId,
+        const userId = isLegacyUserId(parsed.userId) ? generateUserId() : parsed.userId;
+        const stored: Stored = {
+          userId,
           tribeName: parsed.tribeName ?? "",
-          avatarSeed: parsed.avatarSeed,
+          avatarSeed: userId === parsed.userId ? parsed.avatarSeed : userId,
           nameChosen: parsed.nameChosen ?? false,
         };
+        if (userId !== parsed.userId) localStorage.setItem(IDENTITY_KEY, JSON.stringify(stored));
+        return stored;
       }
     }
   } catch {
@@ -42,7 +53,7 @@ function loadOrCreate(): Stored {
 
 export function useTribeIdentity(): TribeIdentity & { setTribeName: (name: string) => void } {
   const [stored, setStored] = useState<Stored>(loadOrCreate);
-  const isAdmin = !!localStorage.getItem("tribe:admin-token");
+  const isAdmin = !!sessionStorage.getItem(ADMIN_TOKEN_KEY);
 
   const setTribeName = useCallback((name: string) => {
     setStored((prev) => {

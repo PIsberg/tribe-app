@@ -18,21 +18,30 @@ export function ChatFeed({ messages, currentUserId, currentUserName, onLike, onT
   const bottomRef = useRef<HTMLDivElement>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const wasNearBottomRef = useRef(true);
   const prevLengthRef = useRef(0);
+  const lastScrollTopRef = useRef(0);
 
   // Only show top-level messages (no parentId) in the main feed
   const topLevel = messages.filter((m) => !m.parentId);
 
   const isNearBottom = useCallback(() => {
     const el = feedRef.current;
-    return !el || el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_THRESHOLD;
+    if (!el) return true;
+    const isScrollable = el.scrollHeight > el.clientHeight;
+    if (!isScrollable) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_THRESHOLD;
   }, []);
 
   const scrollToBottom = useCallback(() => {
     const el = feedRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-    setUnreadCount(0);
-    setShowScrollBtn(false);
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+      setShowScrollBtn(false);
+      setUnreadCount(0);
+      wasNearBottomRef.current = true;
+      lastScrollTopRef.current = el.scrollTop;
+    }
   }, []);
 
   // hasMessages gates the scroll listener: when messages first arrive the feed div
@@ -46,13 +55,45 @@ export function ChatFeed({ messages, currentUserId, currentUserName, onLike, onT
     const el = feedRef.current;
     if (!el) return;
     const onScroll = () => {
+      const currentScrollTop = el.scrollTop;
       const atBottom = isNearBottom();
-      setShowScrollBtn(!atBottom);
-      if (atBottom) setUnreadCount(0);
+
+      if (atBottom) {
+        wasNearBottomRef.current = true;
+        setShowScrollBtn(false);
+        setUnreadCount(0);
+      } else {
+        // Only set wasNearBottom to false if the user actually scrolled UP (scrollTop decreased)
+        // This avoids layout updates / programmatic scrolls falsely marking user as scrolled up.
+        if (currentScrollTop < lastScrollTopRef.current) {
+          wasNearBottomRef.current = false;
+          setShowScrollBtn(true);
+        }
+      }
+
+      lastScrollTopRef.current = currentScrollTop;
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
   }, [hasMessages, isNearBottom]);
+
+  // Keep scroll at bottom on layout/resize shifts if the user was near the bottom
+  useEffect(() => {
+    const el = feedRef.current;
+    if (!el) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (wasNearBottomRef.current) {
+        el.scrollTop = el.scrollHeight;
+        setShowScrollBtn(false);
+        setUnreadCount(0);
+        lastScrollTopRef.current = el.scrollTop;
+      }
+    });
+
+    resizeObserver.observe(el);
+    return () => resizeObserver.disconnect();
+  }, []);
 
   // Auto-scroll when new messages arrive. On first load, always land at bottom
   // (standard chat UX); afterwards only auto-scroll if the user is near bottom.
@@ -60,16 +101,22 @@ export function ChatFeed({ messages, currentUserId, currentUserName, onLike, onT
     const newCount = topLevel.length - prevLengthRef.current;
     if (newCount > 0) {
       const isFirstLoad = prevLengthRef.current === 0;
-      if (isFirstLoad || isNearBottom()) {
+      if (isFirstLoad || wasNearBottomRef.current) {
         const el = feedRef.current;
-        if (el) el.scrollTop = el.scrollHeight;
+        if (el) {
+          el.scrollTop = el.scrollHeight;
+          setShowScrollBtn(false);
+          setUnreadCount(0);
+          wasNearBottomRef.current = true;
+          lastScrollTopRef.current = el.scrollTop;
+        }
       } else {
         setUnreadCount((c) => c + newCount);
         setShowScrollBtn(true);
       }
     }
     prevLengthRef.current = topLevel.length;
-  }, [topLevel.length, isNearBottom]);
+  }, [topLevel.length]);
 
   if (topLevel.length === 0) {
     return (
