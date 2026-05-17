@@ -11,7 +11,18 @@ export function getAdminToken(): string | undefined {
   return normalized || undefined;
 }
 
+export function constantTimeEqual(a: string, b: string): boolean {
+  const maxLength = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < maxLength; i += 1) {
+    diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  }
+  return diff === 0;
+}
+
 export function assertAdmin(token: string): void {
   const expected = getAdminToken();
-  if (!expected || normalize(token) !== expected) throw new Error("Unauthorized");
+  if (!expected || !constantTimeEqual(normalize(token), expected)) {
+    throw new Error("Unauthorized");
+  }
 }

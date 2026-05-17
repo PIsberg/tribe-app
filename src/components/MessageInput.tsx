@@ -6,11 +6,19 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { EmojiPicker } from "./EmojiPicker";
 
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
 function extractError(err: unknown): string {
   if (err instanceof ConvexError) {
     return typeof err.data === "string" ? err.data : "Action blocked.";
   }
   return err instanceof Error ? err.message : "Failed to send";
+}
+
+function validateImage(file: File): string | null {
+  if (!file.type.startsWith("image/")) return "Only image uploads are allowed.";
+  if (file.size > MAX_IMAGE_BYTES) return "Images must be 5 MB or smaller.";
+  return null;
 }
 
 function MutedBanner({ until }: { until: number }) {
@@ -118,7 +126,10 @@ export function MessageInput({ onSend, disabled, tribeName, tribeId, userId, mut
     try {
       let storageId: Id<"_storage"> | undefined;
       if (imageFile) {
-        const uploadUrl = await generateUploadUrl({ userId: userId!, tribeId: tribeId! });
+        if (!userId || !tribeId) throw new Error("Join the campfire before uploading.");
+        const invalidImage = validateImage(imageFile);
+        if (invalidImage) throw new Error(invalidImage);
+        const uploadUrl = await generateUploadUrl({ userId, tribeId });
         const res = await fetch(uploadUrl, {
           method: "POST",
           headers: { "Content-Type": imageFile.type },
@@ -146,8 +157,7 @@ export function MessageInput({ onSend, disabled, tribeName, tribeId, userId, mut
     } finally {
       setUploading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, imageFile, disabled, uploading, isMuted, generateUploadUrl, onSend, sendTypingSignal]);
+  }, [value, imageFile, disabled, uploading, isMuted, generateUploadUrl, onSend, sendTypingSignal, userId, tribeId]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -161,6 +171,11 @@ export function MessageInput({ onSend, disabled, tribeName, tribeId, userId, mut
       .find((item) => item.type.startsWith("image/"))
       ?.getAsFile();
     if (!file) return;
+    const invalidImage = validateImage(file);
+    if (invalidImage) {
+      setError(invalidImage);
+      return;
+    }
     e.preventDefault();
     setImageFile(file);
     const reader = new FileReader();
@@ -176,6 +191,12 @@ export function MessageInput({ onSend, disabled, tribeName, tribeId, userId, mut
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const invalidImage = validateImage(file);
+    if (invalidImage) {
+      setError(invalidImage);
+      e.target.value = "";
+      return;
+    }
     setImageFile(file);
     const reader = new FileReader();
     reader.onload = () => setImagePreview(reader.result as string);

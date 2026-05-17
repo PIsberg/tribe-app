@@ -6,8 +6,25 @@ import { assertFireHasCapacity } from "./lib/capacity";
 import { checkRateLimit } from "./lib/rateLimit";
 import { assertInRadius } from "./lib/geofence";
 import { touchTribeActivity } from "./lib/tribeActivity";
+import type { Doc } from "./_generated/dataModel";
 
 const THIRTY_MINUTES = 30 * 60 * 1000;
+
+function assertCanPost(member: Doc<"tribeMembers"> | null): void {
+  if (!member) return;
+  if (member.banned) {
+    throw new ConvexError("You have been permanently banned from this campfire. 🔨");
+  }
+  if (member.kicked) {
+    throw new ConvexError("You've been kicked from this campfire. 🚫");
+  }
+  if (member.kickedUntil && member.kickedUntil > Date.now()) {
+    const remaining = Math.ceil((member.kickedUntil - Date.now()) / 60_000);
+    throw new ConvexError(
+      `Muted. You can try again in ${remaining} minute${remaining !== 1 ? "s" : ""}. 🔇`
+    );
+  }
+}
 
 // Likes are fetched via a separate subscription (api.reactions.likesForTribe).
 // Splitting them off means a like no longer invalidates this query for every
@@ -69,6 +86,7 @@ export const generateUploadUrl = mutation({
       )
       .first();
     if (!member) throw new ConvexError("You must be a tribe member to upload images.");
+    assertCanPost(member);
     await checkRateLimit(ctx, `upload:${args.userId}`, 5, 60_000);
     return ctx.storage.generateUploadUrl();
   },
@@ -109,17 +127,9 @@ export const send = mutation({
       throw new ConvexError("Reserved name.");
     }
 
-    if (member?.banned) {
-      throw new ConvexError("You have been permanently banned from this campfire. 🔨");
-    }
-    if (member?.kicked) {
-      throw new ConvexError("You've been kicked from this campfire. 🚫");
-    }
-    if (member?.kickedUntil && member.kickedUntil > Date.now()) {
-      const remaining = Math.ceil((member.kickedUntil - Date.now()) / 60_000);
-      throw new ConvexError(
-        `Muted. You can try again in ${remaining} minute${remaining !== 1 ? "s" : ""}. 🔇`
-      );
+    assertCanPost(member);
+    if (storageId && !member) {
+      throw new ConvexError("You must be a tribe member to attach images.");
     }
 
     await incrementCounter(ctx, "messages_sent");

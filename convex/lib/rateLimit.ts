@@ -36,12 +36,10 @@ export const purgeStale = internalMutation({
   args: {},
   handler: async (ctx) => {
     const cutoff = Date.now() - STALE_AFTER_MS;
-    // No index on windowStart — full scan is fine because we cap at 500/run
-    // and the cron rate × 500 keeps up with rate-limit row growth at the
-    // scales we're targeting. If the table ever outpaces this, add an index.
+    // Querying with index to avoid slow full-table scans.
     const stale = await ctx.db
       .query("rateLimits")
-      .filter((q) => q.lt(q.field("windowStart"), cutoff))
+      .withIndex("by_windowStart", (q) => q.lt("windowStart", cutoff))
       .take(500);
     await Promise.all(stale.map((r) => ctx.db.delete(r._id)));
     if (stale.length === 500) {

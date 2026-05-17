@@ -96,5 +96,7 @@ export default defineSchema({
     key: v.string(),
     windowStart: v.number(),
     count: v.number(),
-  }).index("by_key_and_window", ["key", "windowStart"]),
+  })
+    .index("by_key_and_window", ["key", "windowStart"])
+    .index("by_windowStart", ["windowStart"]),
 });

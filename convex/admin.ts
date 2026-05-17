@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
-import { assertAdmin, getAdminToken, normalize } from "./lib/auth";
+import { assertAdmin, constantTimeEqual, getAdminToken, normalize } from "./lib/auth";
 import { ensureUser, adjustTribeMemberCount, tribeMemberActiveDelta } from "./metrics";
 
 declare const process: { env: Record<string, string | undefined> };
@@ -12,29 +12,7 @@ export const verifyToken = mutation({
   args: { token: v.string() },
   handler: async (_ctx, { token }) => {
     const expected = getAdminToken();
-    return !!(expected && normalize(token) === expected);
-  },
-});
-
-// Temporary diagnostic — returns metadata about ADMIN_TOKEN without leaking
-// the actual value. Safe to call from anywhere. Remove once login works.
-export const debugTokenInfo = mutation({
-  args: { sample: v.string() },
-  handler: async (_ctx, { sample }) => {
-    const raw = process.env.ADMIN_TOKEN;
-    const normalizedExpected = raw ? normalize(raw) : null;
-    const normalizedSample = normalize(sample);
-    const firstCharCode = raw && raw.length > 0 ? raw.charCodeAt(0) : null;
-    const lastCharCode = raw && raw.length > 0 ? raw.charCodeAt(raw.length - 1) : null;
-    return {
-      isSet: !!raw,
-      rawLength: raw?.length ?? 0,
-      normalizedExpectedLength: normalizedExpected?.length ?? 0,
-      normalizedSampleLength: normalizedSample.length,
-      firstCharCode,                  // 39 = ', 34 = ", 96 = `
-      lastCharCode,
-      matches: !!(normalizedExpected && normalizedSample === normalizedExpected),
-    };
+    return !!(expected && constantTimeEqual(normalize(token), expected));
   },
 });
 
