@@ -143,7 +143,9 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, onAutoRedire
 
   // Transit host: push current position every 15s so the fire's center stays live.
   const geoRef = useRef(geo);
-  geoRef.current = geo;
+  useEffect(() => {
+    geoRef.current = geo;
+  }, [geo]);
   const isTransitHost = tribe.mode === "transit" && tribe.creatorId === identity.userId;
   useEffect(() => {
     if (!isTransitHost) return;
@@ -597,6 +599,7 @@ function TribeShell() {
     const isTransit = activeTribe.mode === "transit";
     const isFresh = isTransit &&
       activeTribe.transitUpdatedAt != null &&
+      // eslint-disable-next-line react-hooks/purity
       Date.now() - activeTribe.transitUpdatedAt < TRANSIT_STALE_MS;
     const centerLat = isFresh ? (activeTribe.transitLat ?? activeTribe.lat) : activeTribe.lat;
     const centerLng = isFresh ? (activeTribe.transitLng ?? activeTribe.lng) : activeTribe.lng;
