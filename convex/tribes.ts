@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { ConvexError } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { incrementCounter, ensureUser, readTribeMemberCount } from "./metrics";
@@ -9,6 +10,15 @@ const NEARBY_RADIUS_M = 50_000;
 // ─── Geohash utilities (inlined to avoid a separate lib module) ───────────────
 
 const BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz";
+
+function haversineM(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6_371_000;
+  const r = (d: number) => (d * Math.PI) / 180;
+  const a =
+    Math.sin(r(lat2 - lat1) / 2) ** 2 +
+    Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(r(lon2 - lon1) / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 function encode(lat: number, lng: number, precision = 4): string {
   let idx = 0, bit = 0, isEven = true, hash = "";
@@ -144,20 +154,120 @@ export const create = mutation({
     creatorId: v.string(),
     lat: v.number(),
     lng: v.number(),
+    mode: v.optional(v.union(v.literal("static"), v.literal("transit"))),
   },
   handler: async (ctx, args) => {
     await incrementCounter(ctx, "tribes_created");
     await ensureUser(ctx, args.creatorId);
+    const now = Date.now();
     const tribeId = await ctx.db.insert("tribes", {
-      ...args,
-      createdAt: Date.now(),
+      name: args.name,
+      creatorId: args.creatorId,
+      lat: args.lat,
+      lng: args.lng,
+      createdAt: now,
       geohash4: encode(args.lat, args.lng),
+      ...(args.mode === "transit" ? {
+        mode: "transit" as const,
+        transitLat: args.lat,
+        transitLng: args.lng,
+        transitBearing: 0,
+        transitSpeedKmh: 0,
+        transitUpdatedAt: now,
+      } : {}),
     });
     await ctx.scheduler.runAfter(500, internal.bots.greetTribe, {
       tribeId,
       tribeName: args.name,
     });
     return tribeId;
+  },
+});
+
+/** Called by the transit fire's creator every ~15s to keep the center current. */
+export const updateTransitPosition = mutation({
+  args: {
+    tribeId: v.id("tribes"),
+    userId: v.string(),
+    lat: v.number(),
+    lng: v.number(),
+    bearing: v.number(),
+    speedKmh: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const tribe = await ctx.db.get(args.tribeId);
+    if (!tribe) throw new ConvexError("Campfire not found.");
+    if (tribe.creatorId !== args.userId) throw new ConvexError("UNAUTHORIZED");
+    await ctx.db.patch(args.tribeId, {
+      transitLat: args.lat,
+      transitLng: args.lng,
+      transitBearing: args.bearing,
+      transitSpeedKmh: args.speedKmh,
+      transitUpdatedAt: Date.now(),
+      lat: args.lat,
+      lng: args.lng,
+      geohash4: encode(args.lat, args.lng),
+    });
+  },
+});
+
+/** Find active transit fires near the caller — used to detect same-vehicle fires. */
+export const findTransitNearby = query({
+  args: {
+    lat: v.number(),
+    lng: v.number(),
+    bearing: v.number(),
+    speedKmh: v.number(),
+  },
+  handler: async (ctx, { lat, lng, bearing, speedKmh }) => {
+    const staleCutoff = Date.now() - 5 * 60 * 1000;
+    const candidates = await ctx.db
+      .query("tribes")
+      .withIndex("by_mode_and_transitUpdatedAt", (q) =>
+        q.eq("mode", "transit").gt("transitUpdatedAt", staleCutoff)
+      )
+      .take(50);
+
+    return candidates.filter((t) => {
+      const dist = haversineM(lat, lng, t.transitLat ?? t.lat, t.transitLng ?? t.lng);
+      if (dist > 150) return false;
+      const bd = Math.abs((t.transitBearing ?? 0) - bearing) % 360;
+      const bearingMatch = (bd > 180 ? 360 - bd : bd) < 45;
+      const speedMatch = Math.abs((t.transitSpeedKmh ?? 0) - speedKmh) / Math.max(speedKmh, 1) < 0.3;
+      return bearingMatch && speedMatch;
+    });
+  },
+});
+
+/** Cron target: convert stale or stopped transit fires to static so the 1500m geofence applies. */
+export const stopStaleTransitFires = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const staleCutoff = now - 5 * 60 * 1000;
+
+    // Fires whose host stopped pushing updates
+    const stale = await ctx.db
+      .query("tribes")
+      .withIndex("by_mode_and_transitUpdatedAt", (q) =>
+        q.eq("mode", "transit").lt("transitUpdatedAt", staleCutoff)
+      )
+      .take(50);
+
+    // Recently-updated fires where the vehicle stopped
+    const recent = await ctx.db
+      .query("tribes")
+      .withIndex("by_mode_and_transitUpdatedAt", (q) =>
+        q.eq("mode", "transit").gt("transitUpdatedAt", staleCutoff)
+      )
+      .take(50);
+    const stopped = recent.filter((t) => (t.transitSpeedKmh ?? 999) < 5);
+
+    const toConvert = [...stale, ...stopped];
+    await Promise.all(
+      toConvert.map((t) => ctx.db.patch(t._id, { mode: "static" }))
+    );
+    return toConvert.length;
   },
 });
 

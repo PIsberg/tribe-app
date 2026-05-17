@@ -4,6 +4,8 @@ export const TRIBE_CENTER = {
 };
 
 export const GEOFENCE_RADIUS_M = 1500;
+export const TRANSIT_RADIUS_M = 150;
+export const TRANSIT_STALE_MS = 5 * 60 * 1000;
 
 export function haversineDistance(
   lat1: number,

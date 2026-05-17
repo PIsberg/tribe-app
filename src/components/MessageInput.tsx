@@ -146,6 +146,7 @@ export function MessageInput({ onSend, disabled, tribeName, tribeId, userId, mut
     } finally {
       setUploading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, imageFile, disabled, uploading, isMuted, generateUploadUrl, onSend, sendTypingSignal]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {

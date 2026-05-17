@@ -13,10 +13,18 @@ export default defineSchema({
     // For overflow tribes: id of the original tribe this is sharded from.
     // Null/undefined on the root tribe in the family.
     overflowOf: v.optional(v.id("tribes")),
+    // Transit fires: follow a moving vehicle (bus/train)
+    mode: v.optional(v.union(v.literal("static"), v.literal("transit"))),
+    transitLat: v.optional(v.number()),
+    transitLng: v.optional(v.number()),
+    transitBearing: v.optional(v.number()),
+    transitSpeedKmh: v.optional(v.number()),
+    transitUpdatedAt: v.optional(v.number()),
   })
     .index("by_createdAt", ["createdAt"])
     .index("by_geohash4", ["geohash4"])
-    .index("by_overflowOf", ["overflowOf"]),
+    .index("by_overflowOf", ["overflowOf"])
+    .index("by_mode_and_transitUpdatedAt", ["mode", "transitUpdatedAt"]),
 
   typing: defineTable({
     tribeId: v.id("tribes"),

@@ -25,7 +25,7 @@ import { useActiveTribe } from "./hooks/useActiveTribe";
 import { useTribeIdentity } from "./hooks/useTribeIdentity";
 import { usePageActive } from "./hooks/usePageActive";
 import { usePushLatencyTelemetry } from "./hooks/usePushLatencyTelemetry";
-import { haversineDistance, formatDistance, GEOFENCE_RADIUS_M } from "./utils/geo";
+import { haversineDistance, formatDistance, GEOFENCE_RADIUS_M, TRANSIT_RADIUS_M, TRANSIT_STALE_MS } from "./utils/geo";
 import type { Message } from "./components/MessageBubble";
 import type { GeoState } from "./hooks/useGeolocation";
 
@@ -77,6 +77,7 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, onAutoRedire
   const toggleLikeMutation = useMutation(api.messages.toggleLike);
   const deleteMessageMutation = useMutation(api.messages.deleteMessage);
   const joinOrOverflowMutation = useMutation(api.members.joinOrOverflow);
+  const updateTransitPos = useMutation(api.tribes.updateTransitPosition);
 
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [showNearby, setShowNearby] = useState(false);
@@ -139,6 +140,31 @@ function InnerCircle({ tribe, allTribes, geo, onLeave, onJoinOther, onAutoRedire
     const t = setTimeout(onLeave, 4000);
     return () => clearTimeout(t);
   }, [isKicked, onLeave]);
+
+  // Transit host: push current position every 15s so the fire's center stays live.
+  const geoRef = useRef(geo);
+  useEffect(() => {
+    geoRef.current = geo;
+  }, [geo]);
+  const isTransitHost = tribe.mode === "transit" && tribe.creatorId === identity.userId;
+  useEffect(() => {
+    if (!isTransitHost) return;
+    const push = () => {
+      const g = geoRef.current;
+      if (!g.coords) return;
+      updateTransitPos({
+        tribeId,
+        userId: identity.userId,
+        lat: g.coords.lat,
+        lng: g.coords.lng,
+        bearing: g.heading ?? 0,
+        speedKmh: (g.speed ?? 0) * 3.6,
+      });
+    };
+    push();
+    const id = setInterval(push, 15_000);
+    return () => clearInterval(id);
+  }, [isTransitHost, tribeId, identity.userId, updateTransitPos]);
 
   // Nearby campfires (excluding current, within 50km)
   const nearbyOthers = useMemo(() => {
@@ -570,8 +596,16 @@ function TribeShell() {
     if (!activeTribeId || !activeTribe) return { status: "ok" };
     if (geo.status === "denied" || geo.status === "unsupported" || geo.status === "error") return { status: "denied", tribeName: activeTribe.name };
     if (geo.status !== "granted" || !geo.coords) return { status: "checking" };
-    const dist = haversineDistance(geo.coords.lat, geo.coords.lng, activeTribe.lat, activeTribe.lng);
-    if (dist > GEOFENCE_RADIUS_M) return { status: "blocked", tribeName: activeTribe.name, dist };
+    const isTransit = activeTribe.mode === "transit";
+    const isFresh = isTransit &&
+      activeTribe.transitUpdatedAt != null &&
+      // eslint-disable-next-line react-hooks/purity
+      Date.now() - activeTribe.transitUpdatedAt < TRANSIT_STALE_MS;
+    const centerLat = isFresh ? (activeTribe.transitLat ?? activeTribe.lat) : activeTribe.lat;
+    const centerLng = isFresh ? (activeTribe.transitLng ?? activeTribe.lng) : activeTribe.lng;
+    const radius = isFresh ? TRANSIT_RADIUS_M : GEOFENCE_RADIUS_M;
+    const dist = haversineDistance(geo.coords.lat, geo.coords.lng, centerLat, centerLng);
+    if (dist > radius) return { status: "blocked", tribeName: activeTribe.name, dist };
     return { status: "ok" };
   }, [isAdmin, activeTribeId, activeTribe, geo.status, geo.coords]);
 
@@ -612,6 +646,7 @@ function TribeShell() {
     const { lat, lng } = geo.coords;
     const nearby = tribes
       .filter((t) => haversineDistance(lat, lng, t.lat, t.lng) <= GEOFENCE_RADIUS_M)
+      .filter((t) => t.mode !== "transit") // transit fires require explicit opt-in
       .sort((a, b) => (b.lastMessageAt ?? b.createdAt) - (a.lastMessageAt ?? a.createdAt));
     if (nearby.length === 0) return;
     autoJoinedRef.current = true;
