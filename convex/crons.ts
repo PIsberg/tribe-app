@@ -31,4 +31,11 @@ crons.interval(
   {}
 );
 
+crons.interval(
+  "stop stale transit fires",
+  { minutes: 2 },
+  internal.tribes.stopStaleTransitFires,
+  {}
+);
+
 export default crons;

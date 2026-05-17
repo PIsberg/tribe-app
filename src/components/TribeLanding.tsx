@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Doc } from "../../convex/_generated/dataModel";
 import { CreateTribeForm } from "./CreateTribeForm";
@@ -21,11 +21,22 @@ interface Props {
 
 export function TribeLanding({ geo, tribes, onJoin, onCreate }: Props) {
   const [showForm, setShowForm] = useState(false);
+  const [showTransitForm, setShowTransitForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [pendingJoin, setPendingJoin] = useState<Tribe | null>(null);
   const [showMap, setShowMap] = useState(false);
   const createTribe = useMutation(api.tribes.create);
   const identity = useTribeIdentity();
+
+  const speedKmh = (geo.speed ?? 0) * 3.6;
+  const isInVehicle = speedKmh > 25 && geo.status === "granted" && geo.coords != null;
+
+  const transitFires = useQuery(
+    api.tribes.findTransitNearby,
+    isInVehicle && geo.coords
+      ? { lat: geo.coords.lat, lng: geo.coords.lng, bearing: geo.heading ?? 0, speedKmh }
+      : "skip"
+  );
 
   const isLocating = geo.status === "idle" || geo.status === "requesting";
   const isDenied = geo.status === "denied" || geo.status === "unsupported";
@@ -41,6 +52,24 @@ export function TribeLanding({ geo, tribes, onJoin, onCreate }: Props) {
         creatorId: identity.userId,
         lat: coords.lat,
         lng: coords.lng,
+      });
+      onCreate(newId as string);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCreateTransit = async (tribeName: string, userName: string) => {
+    identity.setTribeName(userName);
+    setCreating(true);
+    const coords = geo.coords ?? { lat: 0, lng: 0 };
+    try {
+      const newId = await createTribe({
+        name: tribeName,
+        creatorId: identity.userId,
+        lat: coords.lat,
+        lng: coords.lng,
+        mode: "transit",
       });
       onCreate(newId as string);
     } finally {
@@ -169,8 +198,78 @@ export function TribeLanding({ geo, tribes, onJoin, onCreate }: Props) {
           )}
         </AnimatePresence>
 
+        {/* Transit fire section — only shown when GPS detects in-vehicle speed */}
+        <AnimatePresence>
+          {isInVehicle && !showForm && !showTransitForm && !pendingJoin && (
+            <motion.div
+              key="transit"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              className="mt-5 rounded-2xl border border-fire-ember/30 bg-fire-ash/40 px-4 py-3"
+            >
+              <p className="font-mono text-[10px] uppercase tracking-widest text-fire-ember/70 mb-2">
+                🚌 You&apos;re in transit
+              </p>
+              {transitFires && transitFires.length > 0 ? (
+                <>
+                  <p className="font-mono text-xs text-fire-char/60 mb-2">
+                    {transitFires.length} fire{transitFires.length > 1 ? "s" : ""} on your vehicle
+                  </p>
+                  {transitFires.map((t) => (
+                    <motion.button
+                      key={t._id}
+                      onClick={() => handleJoin(t)}
+                      whileTap={{ scale: 0.97 }}
+                      className="w-full text-left px-3 py-2 rounded-xl bg-fire-ash/60 border border-fire-char/20 hover:border-fire-ember/40 transition-colors mb-1.5"
+                    >
+                      <span className="font-mono text-sm text-white">{t.name}</span>
+                      <span className="font-mono text-[10px] text-fire-char/40 ml-2">
+                        {Math.round(t.transitSpeedKmh ?? 0)} km/h
+                      </span>
+                    </motion.button>
+                  ))}
+                  <button
+                    onClick={() => setShowTransitForm(true)}
+                    className="font-mono text-[10px] text-fire-char/40 hover:text-fire-glow/60 transition-colors mt-1"
+                  >
+                    + Start a new transit fire
+                  </button>
+                </>
+              ) : (
+                <motion.button
+                  onClick={() => setShowTransitForm(true)}
+                  whileTap={{ scale: 0.97 }}
+                  className="w-full py-2.5 rounded-xl border border-fire-ember/30 font-mono text-xs font-bold text-fire-glow uppercase tracking-widest hover:bg-fire-ember/10 transition-colors"
+                >
+                  Start a Transit Fire
+                </motion.button>
+              )}
+            </motion.div>
+          )}
+          {showTransitForm && (
+            <motion.div
+              key="transit-form"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="mt-4"
+            >
+              <p className="font-mono text-[10px] uppercase tracking-widest text-fire-ember/70 mb-2">
+                🚌 Transit Fire
+              </p>
+              <CreateTribeForm
+                onSubmit={handleCreateTransit}
+                onCancel={() => setShowTransitForm(false)}
+                disabled={creating}
+                defaultUserName={identity.nameChosen ? identity.tribeName : ""}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Nearby tribes + map toggle */}
-        {hasLocation && !showForm && !pendingJoin && geo.coords && (
+        {hasLocation && !showForm && !showTransitForm && !pendingJoin && geo.coords && (
           <>
             <AnimatePresence mode="wait">
               {showMap ? (
@@ -197,7 +296,7 @@ export function TribeLanding({ geo, tribes, onJoin, onCreate }: Props) {
           </>
         )}
 
-        {hasLocation && !showForm && !pendingJoin && geo.coords && (
+        {hasLocation && !showForm && !showTransitForm && !pendingJoin && geo.coords && (
           <div className="mt-6">
             <TribeAd
               slot={import.meta.env.VITE_ADSENSE_SLOT_LANDING}

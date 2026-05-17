@@ -8,12 +8,14 @@ export type Coords = { lat: number; lng: number };
 export type GeoState = {
   status: GeoStatus;
   coords: Coords | null;
+  speed: number | null;   // m/s from GPS, null when unavailable
+  heading: number | null; // degrees 0-360, null when unavailable or stationary
   distance: number | null;
   inside: boolean;
   error: string | null;
 };
 
-type InternalState = Pick<GeoState, "status" | "coords" | "error">;
+type InternalState = Pick<GeoState, "status" | "coords" | "speed" | "heading" | "error">;
 
 const GEO_SUPPORTED = Boolean(navigator?.geolocation);
 
@@ -36,10 +38,12 @@ export function useGeolocation(center?: Coords): GeoState {
   const devOverride = getDevGeoOverride();
 
   const [state, setState] = useState<InternalState>(() => {
-    if (devOverride) return { status: "granted", coords: devOverride, error: null };
+    if (devOverride) return { status: "granted", coords: devOverride, speed: null, heading: null, error: null };
     return {
       status: GEO_SUPPORTED ? "requesting" : "unsupported",
       coords: null,
+      speed: null,
+      heading: null,
       error: GEO_SUPPORTED ? null : "Geolocation not supported",
     };
   });
@@ -48,6 +52,9 @@ export function useGeolocation(center?: Coords): GeoState {
     setState({
       status: "granted",
       coords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+      speed: pos.coords.speed,
+      // heading is NaN when stationary — normalise to null
+      heading: pos.coords.heading != null && !isNaN(pos.coords.heading) ? pos.coords.heading : null,
       error: null,
     });
   }, []);
@@ -56,6 +63,8 @@ export function useGeolocation(center?: Coords): GeoState {
     setState((prev) => ({
       ...prev,
       status: err.code === GeolocationPositionError.PERMISSION_DENIED ? "denied" : "error",
+      speed: null,
+      heading: null,
       error: err.message,
     }));
   }, []);
